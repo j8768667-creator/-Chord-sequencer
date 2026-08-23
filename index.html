@@ -14,6 +14,7 @@ button,select,input{font:inherit}button,select{min-height:48px;touch-action:mani
 button{border:1px solid #293654;border-radius:16px;background:#151d31;color:#eef2ff;padding:0 18px;cursor:pointer}
 button:active{transform:scale(.98)}button:disabled{opacity:.42;cursor:not-allowed}
 button.primary{background:#35b9f2;color:#07111c;border:0;font-weight:700}
+button.danger{background:#3d1a24;color:#ff8080;border:1px solid #632838}
 .app{min-height:100svh;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));max-width:1500px;margin:auto}
 .panel{border:1px solid #293654;border-radius:22px;background:#11182a;padding:18px;margin-bottom:16px;box-shadow:0 8px 30px #0003}
 .top{display:flex;justify-content:space-between;align-items:center;gap:16px}.top h1{margin:0;font-size:30px}.top p{margin:4px 0 0;color:#9da8be}
@@ -29,15 +30,16 @@ input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
 .block{display:grid;grid-template-columns:40px 1fr auto auto auto;gap:10px;align-items:center;background:#182238;border:1px solid #2d3a55;border-radius:16px;padding:10px}
 .block .roman{font-weight:700}.block .notes{color:#9da8be;font-size:13px;margin-top:4px}
 .tracks>div{display:grid;grid-template-columns:120px 1fr 80px;gap:12px;align-items:center;margin:12px 0}.meter{height:10px;border-radius:10px;background:#24324c;overflow:hidden}.meter i{display:block;width:0;height:100%;background:#35b9f2}
+.action-group{display:flex;gap:8px;align-items:center}
 .message{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translate(-50%,150%);background:#172238;border:1px solid #33405a;padding:13px 18px;border-radius:14px;transition:transform .2s;z-index:20;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}.message.show{transform:translate(-50%,0)}
 @media(max-width:1050px){.controls,.controls-secondary{grid-template-columns:1fr 1fr}}
-@media(max-width:620px){.top{align-items:flex-start;flex-direction:column}.controls,.controls-secondary{grid-template-columns:1fr}.heading{align-items:flex-start;flex-direction:column}.tracks>div{grid-template-columns:85px 1fr 76px}.block{grid-template-columns:30px 1fr auto auto auto}}
+@media(max-width:620px){.top{align-items:flex-start;flex-direction:column}.controls,.controls-secondary{grid-template-columns:1fr}.heading{align-items:flex-start;flex-direction:column}.tracks>div{grid-template-columns:85px 1fr 76px}.block{grid-template-columns:30px 1fr auto auto auto}.action-group{flex-wrap:wrap}}
 </style>
 </head>
 <body>
 <main class="app">
 <header class="panel top">
-  <div><h1>ChordFlow Studio Pro</h1><p>Expressive Engine + Working MIDI Import/Export</p></div>
+  <div><h1>ChordFlow Studio Pro</h1><p>DAW-Compatible MIDI Engine with Dynamic Articulation</p></div>
   <div class="statuses"><span id="audioStatus" class="status">Audio Locked</span><span id="playStatus" class="status">Stopped</span></div>
 </header>
 
@@ -91,8 +93,13 @@ input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
 
 <section class="panel">
   <div class="heading">
-    <div><h2>Arrangement Timeline</h2><p>Auto-voiced progression flow with live mode shift and working MIDI export/import.</p></div>
-    <div><button id="importBtn">Import MIDI</button><button id="exportBtn">Export MIDI</button><input id="midiInput" type="file" accept=".mid,.midi" hidden></div>
+    <div><h2>Arrangement Timeline</h2><p>Auto-voiced progression timeline.</p></div>
+    <div class="action-group">
+      <button id="clearBtn" class="danger">Clear Chords</button>
+      <button id="importBtn">Import MIDI</button>
+      <button id="exportBtn">Export MIDI</button>
+      <input id="midiInput" type="file" accept=".mid,.midi" hidden>
+    </div>
   </div>
   <div id="arrangement" class="arrangement"></div>
 </section>
@@ -137,7 +144,7 @@ const DEG={I:0,II:1,III:2,IV:3,V:4,VI:5,VII:6};
 
 function $(id){return document.getElementById(id)}
 
-/* ---------- Advanced Voice-Leading Engine ---------- */
+/* ---------- Voice-Leading Engine ---------- */
 function parseChordNotes(symbol, rootStr, scaleModeStr, lastNotes=null) {
   let pc = ROOTS[rootStr] !== undefined ? ROOTS[rootStr] : 0;
   const scale = SCALES[scaleModeStr] || SCALES.major;
@@ -210,7 +217,13 @@ function renderPresets(){
 
 function renderArrangement(){
   const box=$("arrangement");box.replaceChildren();
-  if(!blocks.length){box.className="arrangement empty";box.textContent="Timeline empty. Choose a sequence above or import MIDI.";return}
+  if(!blocks.length){
+    box.className="arrangement empty";
+    box.textContent="Timeline empty. Choose a sequence above, import MIDI, or start creating.";
+    if ($("play")) $("play").disabled = true;
+    return;
+  }
+  if ($("play") && audioCtx) $("play").disabled = false;
   box.className="arrangement";
   blocks.forEach((b,i)=>{
     const row=document.createElement("div");row.className="block";
@@ -247,45 +260,55 @@ function loadPreset(p, id){
   renderPresets();renderArrangement();$("play").disabled=!audioCtx;toast("Loaded: "+p.name);
 }
 
-/* ---------- Native MIDI Encoder & Parser Engine ---------- */
-function encodeVarInt(num) {
-  let buf = [], res = num & 0x7F;
-  while (num >>= 7) {
-    res <<= 8;
-    res |= ((num & 0x7F) | 0x80);
-  }
+function clearTimeline() {
+  stop();
+  blocks = [];
+  selectedId = null;
+  renderPresets();
+  renderArrangement();
+  toast("Arrangement timeline cleared!");
+}
+
+/* ---------- Standard Formatted MIDI Export & Import ---------- */
+function encodeVarInt(value) {
+  let buffer = [];
+  let num = value;
   while (true) {
-    buf.push(res & 0xFF);
-    if (res & 0x80) res >>= 8;
-    else break;
+    buffer.unshift(num & 0x7F);
+    num >>= 7;
+    if (num <= 0) break;
   }
-  return buf;
+  for (let i = 0; i < buffer.length - 1; i++) {
+    buffer[i] |= 0x80;
+  }
+  return buffer;
 }
 
 function exportMIDIFile() {
   if (!blocks.length) { toast("No timeline blocks to export!"); return; }
 
-  const ppq = 480; // Pulse per quarter note
+  const ppq = 480;
   let trackEvents = [];
 
-  // Tempo Meta Event (Microseconds per beat)
+  // Meta Tempo Event
   const mpqn = Math.round(60000000 / bpm);
   trackEvents.push(0x00, 0xFF, 0x51, 0x03, (mpqn >> 16) & 0xFF, (mpqn >> 8) & 0xFF, mpqn & 0xFF);
 
-  let currentTicks = 0;
-  blocks.forEach(b => {
-    const chordDurationTicks = ppq * 4; // 1 measure
-    const notes = b.notes;
+  // DAW Initializer Controllers (CC 7 Channel Volume = 100, CC 10 Pan = 64)
+  trackEvents.push(0x00, 0xB0, 0x07, 0x64);
+  trackEvents.push(0x00, 0xB0, 0x0A, 0x40);
 
-    // Note ON
+  // Write Chords with Correct Variable Length Deltas
+  const chordTicks = ppq * 4;
+  blocks.forEach((b) => {
+    const notes = b.notes;
     notes.forEach((pitch, idx) => {
-      const delta = idx === 0 ? 0 : 0;
-      trackEvents.push(...encodeVarInt(delta), 0x90, pitch, 0x64);
+      const delta = (idx === 0) ? 0 : 0;
+      trackEvents.push(...encodeVarInt(delta), 0x90, pitch, 0x60);
     });
 
-    // Note OFF
     notes.forEach((pitch, idx) => {
-      const delta = idx === 0 ? chordDurationTicks : 0;
+      const delta = (idx === 0) ? chordTicks : 0;
       trackEvents.push(...encodeVarInt(delta), 0x80, pitch, 0x00);
     });
   });
@@ -293,34 +316,34 @@ function exportMIDIFile() {
   // End of Track Meta Event
   trackEvents.push(0x00, 0xFF, 0x2F, 0x00);
 
-  // MThd Header Chunk
+  // Binary Chunk Formatting
   const header = [
-    0x4D, 0x74, 0x68, 0x64, // "MThd"
-    0x00, 0x00, 0x00, 0x06, // Chunk length
-    0x00, 0x00,             // Single track format
-    0x00, 0x01,             // 1 track
+    0x4D, 0x74, 0x68, 0x64, // MThd
+    0x00, 0x00, 0x00, 0x06,
+    0x00, 0x00,             // Type 0
+    0x00, 0x01,             // 1 Track
     (ppq >> 8) & 0xFF, ppq & 0xFF
   ];
 
-  // MTrk Track Chunk
+  const tLen = trackEvents.length;
   const trackHeader = [
-    0x4D, 0x74, 0x72, 0x6B, // "MTrk"
-    (trackEvents.length >> 24) & 0xFF,
-    (trackEvents.length >> 16) & 0xFF,
-    (trackEvents.length >> 8) & 0xFF,
-    trackEvents.length & 0xFF
+    0x4D, 0x74, 0x72, 0x6B, // MTrk
+    (tLen >> 24) & 0xFF,
+    (tLen >> 16) & 0xFF,
+    (tLen >> 8) & 0xFF,
+    tLen & 0xFF
   ];
 
-  const midiBytes = new Uint8Array([...header, ...trackHeader, ...trackEvents]);
-  const blob = new Blob([midiBytes], { type: "audio/midi" });
+  const midiBuffer = new Uint8Array([...header, ...trackHeader, ...trackEvents]);
+  const blob = new Blob([midiBuffer], { type: "audio/midi" });
   const url = URL.createObjectURL(blob);
   
   const a = document.createElement("a");
   a.href = url;
-  a.download = "ChordFlow_Sequence.mid";
+  a.download = "ChordFlow_DAW_Ready.mid";
   a.click();
   URL.revokeObjectURL(url);
-  toast("MIDI File Exported!");
+  toast("MIDI Exported - DAW Compatible!");
 }
 
 function parseMIDIFile(arrayBuffer) {
@@ -333,8 +356,8 @@ function parseMIDIFile(arrayBuffer) {
     return str;
   }
 
-  if (readString(4) !== "MThd") { toast("Invalid MIDI file header!"); return; }
-  offset += 4; // Skip length
+  if (readString(4) !== "MThd") { toast("Invalid MIDI file structure!"); return; }
+  offset += 4;
   const format = data.getUint16(offset); offset += 2;
   const tracksCount = data.getUint16(offset); offset += 2;
   const division = data.getUint16(offset); offset += 2;
@@ -351,7 +374,6 @@ function parseMIDIFile(arrayBuffer) {
     let runningStatus = 0;
 
     while (offset < trackEnd) {
-      // Read VarInt Delta Time
       let delta = 0;
       while (true) {
         let byte = data.getUint8(offset++);
@@ -369,14 +391,14 @@ function parseMIDIFile(arrayBuffer) {
       }
 
       const command = status & 0xF0;
-      if (command === 0x90) { // Note ON
+      if (command === 0x90) {
         const pitch = data.getUint8(offset++);
         const vel = data.getUint8(offset++);
         if (vel > 0) allNotes.push({ pitch, ticks: absoluteTicks });
-      } else if (command === 0x80) { // Note OFF
+      } else if (command === 0x80) {
         offset += 2;
-      } else if (status === 0xFF) { // Meta Event
-        offset++; // type
+      } else if (status === 0xFF) {
+        offset++;
         let metaLen = 0;
         while (true) {
           let b = data.getUint8(offset++);
@@ -385,14 +407,13 @@ function parseMIDIFile(arrayBuffer) {
         }
         offset += metaLen;
       } else {
-        offset += 2; // Default 2 data bytes skip
+        offset += 2;
       }
     }
   }
 
-  if (!allNotes.length) { toast("No note events found in MIDI file."); return; }
+  if (!allNotes.length) { toast("No playable notes found."); return; }
 
-  // Group notes into quantised chord blocks
   allNotes.sort((a,b) => a.ticks - b.ticks);
   let parsedBlocks = [], currentGroup = [], lastTicks = -1;
 
@@ -418,7 +439,7 @@ function parseMIDIFile(arrayBuffer) {
 
   blocks = parsedBlocks;
   renderArrangement();
-  toast("Successfully Imported " + blocks.length + " Blocks!");
+  toast("Imported " + blocks.length + " Chords!");
 }
 
 /* ---------- Audio Engine ---------- */
@@ -448,7 +469,7 @@ async function enableAudio(){
       master.connect(audioCtx.destination); master.connect(reverbNode);
     }
     if(audioCtx.state!=="running")await audioCtx.resume();
-    $("audioStatus").textContent="Audio Active";$("audio").textContent="Audio Ready";$("audio").disabled=true;$("play").disabled=!blocks.length;toast("Studio Engine Unlocked");
+    $("audioStatus").textContent="Audio Active";$("audio").textContent="Audio Ready";$("audio").disabled=true;$("play").disabled=!blocks.length;toast("Audio Ready");
   }catch(e){toast(e.message)}
 }
 
@@ -627,10 +648,11 @@ function stop(){
   isPlaying = false; $("playStatus").textContent="Stopped";
 }
 
-/* ---------- Event Binding ---------- */
+/* ---------- Events ---------- */
 $("audio").onclick=enableAudio;
 $("play").onclick=start;
 $("stop").onclick=stop;
+$("clearBtn").onclick=clearTimeline;
 $("exportBtn").onclick=exportMIDIFile;
 $("importBtn").onclick=() => $("midiInput").click();
 $("midiInput").onchange=function(e) {
