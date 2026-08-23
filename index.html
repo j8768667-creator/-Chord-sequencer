@@ -37,7 +37,7 @@ input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
 <body>
 <main class="app">
 <header class="panel top">
-  <div><h1>ChordFlow Studio Pro</h1><p>Expressive Humanized Audio Engine with Dynamic Articulation</p></div>
+  <div><h1>ChordFlow Studio Pro</h1><p>Expressive Engine + Working MIDI Import/Export</p></div>
   <div class="statuses"><span id="audioStatus" class="status">Audio Locked</span><span id="playStatus" class="status">Stopped</span></div>
 </header>
 
@@ -91,8 +91,8 @@ input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
 
 <section class="panel">
   <div class="heading">
-    <div><h2>Arrangement Timeline</h2><p>Auto-voiced progression flow with expressive articulation controls.</p></div>
-    <div><button id="import">Import MIDI</button><button id="export">Export MIDI</button><input id="midi" type="file" accept=".mid,.midi" hidden></div>
+    <div><h2>Arrangement Timeline</h2><p>Auto-voiced progression flow with live mode shift and working MIDI export/import.</p></div>
+    <div><button id="importBtn">Import MIDI</button><button id="exportBtn">Export MIDI</button><input id="midiInput" type="file" accept=".mid,.midi" hidden></div>
   </div>
   <div id="arrangement" class="arrangement"></div>
 </section>
@@ -124,6 +124,7 @@ const CATALOG={
 };
 
 const ROOTS={"C":0,"C#":1,"D":2,"D#":3,"E":4,"F":5,"F#":6,"G":7,"G#":8,"A":9,"A#":10,"B":11};
+const NOTE_NAMES=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const SCALES={
   major:[0,2,4,5,7,9,11],
   minor:[0,2,3,5,7,8,10],
@@ -228,6 +229,7 @@ function renderArrangement(){
 function revoiceAll(){
   let last = null;
   blocks = blocks.map(b => {
+    if (b.imported) return b;
     const notes = parseChordNotes(b.roman, $("rootKey").value, $("scaleMode").value, last);
     last = notes.slice(1);
     return { ...b, notes };
@@ -245,7 +247,181 @@ function loadPreset(p, id){
   renderPresets();renderArrangement();$("play").disabled=!audioCtx;toast("Loaded: "+p.name);
 }
 
-/* ---------- Audio Engine with Dynamic Velocity Envelopes ---------- */
+/* ---------- Native MIDI Encoder & Parser Engine ---------- */
+function encodeVarInt(num) {
+  let buf = [], res = num & 0x7F;
+  while (num >>= 7) {
+    res <<= 8;
+    res |= ((num & 0x7F) | 0x80);
+  }
+  while (true) {
+    buf.push(res & 0xFF);
+    if (res & 0x80) res >>= 8;
+    else break;
+  }
+  return buf;
+}
+
+function exportMIDIFile() {
+  if (!blocks.length) { toast("No timeline blocks to export!"); return; }
+
+  const ppq = 480; // Pulse per quarter note
+  let trackEvents = [];
+
+  // Tempo Meta Event (Microseconds per beat)
+  const mpqn = Math.round(60000000 / bpm);
+  trackEvents.push(0x00, 0xFF, 0x51, 0x03, (mpqn >> 16) & 0xFF, (mpqn >> 8) & 0xFF, mpqn & 0xFF);
+
+  let currentTicks = 0;
+  blocks.forEach(b => {
+    const chordDurationTicks = ppq * 4; // 1 measure
+    const notes = b.notes;
+
+    // Note ON
+    notes.forEach((pitch, idx) => {
+      const delta = idx === 0 ? 0 : 0;
+      trackEvents.push(...encodeVarInt(delta), 0x90, pitch, 0x64);
+    });
+
+    // Note OFF
+    notes.forEach((pitch, idx) => {
+      const delta = idx === 0 ? chordDurationTicks : 0;
+      trackEvents.push(...encodeVarInt(delta), 0x80, pitch, 0x00);
+    });
+  });
+
+  // End of Track Meta Event
+  trackEvents.push(0x00, 0xFF, 0x2F, 0x00);
+
+  // MThd Header Chunk
+  const header = [
+    0x4D, 0x74, 0x68, 0x64, // "MThd"
+    0x00, 0x00, 0x00, 0x06, // Chunk length
+    0x00, 0x00,             // Single track format
+    0x00, 0x01,             // 1 track
+    (ppq >> 8) & 0xFF, ppq & 0xFF
+  ];
+
+  // MTrk Track Chunk
+  const trackHeader = [
+    0x4D, 0x74, 0x72, 0x6B, // "MTrk"
+    (trackEvents.length >> 24) & 0xFF,
+    (trackEvents.length >> 16) & 0xFF,
+    (trackEvents.length >> 8) & 0xFF,
+    trackEvents.length & 0xFF
+  ];
+
+  const midiBytes = new Uint8Array([...header, ...trackHeader, ...trackEvents]);
+  const blob = new Blob([midiBytes], { type: "audio/midi" });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "ChordFlow_Sequence.mid";
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("MIDI File Exported!");
+}
+
+function parseMIDIFile(arrayBuffer) {
+  const data = new DataView(arrayBuffer);
+  let offset = 0;
+
+  function readString(len) {
+    let str = "";
+    for (let i = 0; i < len; i++) str += String.fromCharCode(data.getUint8(offset++));
+    return str;
+  }
+
+  if (readString(4) !== "MThd") { toast("Invalid MIDI file header!"); return; }
+  offset += 4; // Skip length
+  const format = data.getUint16(offset); offset += 2;
+  const tracksCount = data.getUint16(offset); offset += 2;
+  const division = data.getUint16(offset); offset += 2;
+
+  let allNotes = [];
+
+  for (let track = 0; track < tracksCount; track++) {
+    if (offset >= data.byteLength) break;
+    if (readString(4) !== "MTrk") break;
+    const trackLen = data.getUint32(offset); offset += 4;
+    const trackEnd = offset + trackLen;
+
+    let absoluteTicks = 0;
+    let runningStatus = 0;
+
+    while (offset < trackEnd) {
+      // Read VarInt Delta Time
+      let delta = 0;
+      while (true) {
+        let byte = data.getUint8(offset++);
+        delta = (delta << 7) | (byte & 0x7F);
+        if (!(byte & 0x80)) break;
+      }
+      absoluteTicks += delta;
+
+      let status = data.getUint8(offset);
+      if (status & 0x80) {
+        runningStatus = status;
+        offset++;
+      } else {
+        status = runningStatus;
+      }
+
+      const command = status & 0xF0;
+      if (command === 0x90) { // Note ON
+        const pitch = data.getUint8(offset++);
+        const vel = data.getUint8(offset++);
+        if (vel > 0) allNotes.push({ pitch, ticks: absoluteTicks });
+      } else if (command === 0x80) { // Note OFF
+        offset += 2;
+      } else if (status === 0xFF) { // Meta Event
+        offset++; // type
+        let metaLen = 0;
+        while (true) {
+          let b = data.getUint8(offset++);
+          metaLen = (metaLen << 7) | (b & 0x7F);
+          if (!(b & 0x80)) break;
+        }
+        offset += metaLen;
+      } else {
+        offset += 2; // Default 2 data bytes skip
+      }
+    }
+  }
+
+  if (!allNotes.length) { toast("No note events found in MIDI file."); return; }
+
+  // Group notes into quantised chord blocks
+  allNotes.sort((a,b) => a.ticks - b.ticks);
+  let parsedBlocks = [], currentGroup = [], lastTicks = -1;
+
+  allNotes.forEach(n => {
+    if (lastTicks < 0 || Math.abs(n.ticks - lastTicks) < (division / 2)) {
+      currentGroup.push(n.pitch);
+    } else {
+      if (currentGroup.length) {
+        const unique = Array.from(new Set(currentGroup)).sort((a,b)=>a-b);
+        const rootNoteName = NOTE_NAMES[unique[0] % 12];
+        parsedBlocks.push({ roman: "Imported (" + rootNoteName + ")", notes: unique, imported: true });
+      }
+      currentGroup = [n.pitch];
+    }
+    lastTicks = n.ticks;
+  });
+
+  if (currentGroup.length) {
+    const unique = Array.from(new Set(currentGroup)).sort((a,b)=>a-b);
+    const rootNoteName = NOTE_NAMES[unique[0] % 12];
+    parsedBlocks.push({ roman: "Imported (" + rootNoteName + ")", notes: unique, imported: true });
+  }
+
+  blocks = parsedBlocks;
+  renderArrangement();
+  toast("Successfully Imported " + blocks.length + " Blocks!");
+}
+
+/* ---------- Audio Engine ---------- */
 function createReverbImpulse(ctx) {
   const rate = ctx.sampleRate, length = rate * 2.2, impulse = ctx.createBuffer(2, length, rate);
   for (let c = 0; c < 2; c++) {
@@ -278,13 +454,11 @@ async function enableAudio(){
 
 function hz(n){return 440*Math.pow(2,(n-69)/12)}
 
-// Dynamic Polyphonic Synthesizer Node
 function playPolyNote(note, time, dur, velocity=0.7, style="legato") {
   if (!audioCtx || muted[0]) return;
   const o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator();
   const filter = audioCtx.createBiquadFilter(), gain = audioCtx.createGain();
 
-  // Dynamic Micro-Timing Jitter (+/- 3ms)
   const jitter = (Math.random() - 0.5) * 0.006;
   time = Math.max(audioCtx.currentTime, time + jitter);
 
@@ -341,7 +515,7 @@ function triggerMeter(idx){
   setTimeout(()=>el.style.width="0",120);
 }
 
-/* ---------- Rhythmic Scheduler with Humanization & Articulation ---------- */
+/* ---------- Rhythmic Scheduler ---------- */
 function scheduleBeat(beatIndex, time){
   if (!blocks.length) return;
   const totalBeats = blocks.length * 4;
@@ -355,21 +529,17 @@ function scheduleBeat(beatIndex, time){
   const swingPct = Number($("swing").value) / 100.0;
   const strumSpeedMs = Number($("strumSpeed").value) / 1000.0;
 
-  // Apply Groove Swing on off-beats
   let swingOffset = 0;
   if (blockBeat % 1 !== 0) { swingOffset = (spb * 0.5) * (swingPct * 0.4); }
   const adjustedTime = time + swingOffset;
 
   const chordPitches = block.notes.slice(1);
-  const bassPitch = block.notes[0];
+  const bassPitch = block.notes[0] || (chordPitches[0] ? chordPitches[0] - 24 : 36);
 
-  // Dynamic Velocity Curve (Accent Beat 1 and Beat 3)
   const isAccent = (blockBeat === 0 || blockBeat === 2);
   const baseVelocity = isAccent ? 0.85 : 0.62;
 
-  // Dynamic Articulation Engine
   if (style === "arp") {
-    // 16th Note Arpeggiator
     let pitchList = [...chordPitches];
     if (arpDir === "down") pitchList.reverse();
     else if (arpDir === "updown") pitchList = pitchList.concat([...pitchList].reverse().slice(1,-1));
@@ -379,7 +549,7 @@ function scheduleBeat(beatIndex, time){
       const subTime = adjustedTime + (sub * (spb / 4));
       const subVel = (sub === 0) ? baseVelocity : baseVelocity * (0.65 + Math.random() * 0.2);
       const pitch = pitchList[(Math.floor(beatIndex * 4) + sub) % pitchList.length];
-      playPolyNote(pitch, subTime, spb * 0.35, subVel, "arp");
+      if (pitch) playPolyNote(pitch, subTime, spb * 0.35, subVel, "arp");
     }
     triggerMeter(0);
 
@@ -389,7 +559,6 @@ function scheduleBeat(beatIndex, time){
       const strumedNotes = isUpstroke ? [...chordPitches].reverse() : chordPitches;
       
       strumedNotes.forEach((n, idx) => {
-        // Logarithmic Strum Spacing
         const strumDelay = Math.pow(idx, 1.1) * strumSpeedMs;
         const noteVel = baseVelocity * (1.0 - idx * 0.05);
         playPolyNote(n, adjustedTime + strumDelay, spb * 1.8, noteVel, "strum");
@@ -406,30 +575,27 @@ function scheduleBeat(beatIndex, time){
       triggerMeter(0);
     }
 
-  } else { // Legato (Default Pad Style)
+  } else {
     if (blockBeat === 0) {
       chordPitches.forEach((n, idx) => {
-        const strumDelay = idx * 0.012; // Subtle natural hand drop
+        const strumDelay = idx * 0.012;
         playPolyNote(n, adjustedTime + strumDelay, spb * 3.8, baseVelocity, "legato");
       });
       triggerMeter(0);
     }
   }
 
-  // Dynamic Sub Bass Syncopation
   if (blockBeat === 0 || blockBeat === 2.5) {
     playSubBass(bassPitch, adjustedTime, spb * 1.6, baseVelocity);
     triggerMeter(1);
   }
 
-  // Soft Melodic Highlights
-  if (blockBeat % 1 === 0 && Math.random() > 0.45) {
+  if (blockBeat % 1 === 0 && Math.random() > 0.45 && chordPitches.length) {
     const melPitch = chordPitches[blockBeat % chordPitches.length] + 12;
     playPolyNote(melPitch, adjustedTime + (spb * 0.5), spb * 0.4, baseVelocity * 0.65, style);
     triggerMeter(2);
   }
 
-  // Percussion Pulse
   if (isAccent) playPercussion(adjustedTime, baseVelocity);
   triggerMeter(3);
 
@@ -449,7 +615,7 @@ function scheduler(){
 
 function start(){
   if(!audioCtx||audioCtx.state!=="running"){toast("Enable Audio Engine first!");return}
-  if(!blocks.length){toast("Load a sequence first!");return}
+  if(!blocks.length){toast("Load or import a sequence first!");return}
   stop();
   isPlaying = true; currentBeat = 0;
   nextNoteTime = audioCtx.currentTime + 0.05;
@@ -461,10 +627,20 @@ function stop(){
   isPlaying = false; $("playStatus").textContent="Stopped";
 }
 
-/* ---------- Events & Setup ---------- */
+/* ---------- Event Binding ---------- */
 $("audio").onclick=enableAudio;
 $("play").onclick=start;
 $("stop").onclick=stop;
+$("exportBtn").onclick=exportMIDIFile;
+$("importBtn").onclick=() => $("midiInput").click();
+$("midiInput").onchange=function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => parseMIDIFile(evt.target.result);
+  reader.readAsArrayBuffer(file);
+};
+
 $("rootKey").onchange=function(){ revoiceAll(); renderArrangement(); };
 $("scaleMode").onchange=function(){ revoiceAll(); renderArrangement(); };
 $("bpm").oninput=function(){bpm=Number(this.value);$("bpmText").textContent=bpm};
