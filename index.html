@@ -89,28 +89,53 @@ const CATALOG={
  orchestral:[["i","bVI","bIII","bVII"],["i","iv","bVI","V"],["I","IV","vi","V"],["i","bVII","bVI","V"]],
  soundtrack:[["i","bVI","bIII","bVII"],["i","bVI","iv","V"],["i","bVII","bVI","V"],["I","V","vi","IV"]]
 };
+
 const ROOTS={C:0,G:7,D:2,A:9,E:4,F:5,B:11};
 const SCALE={major:[0,2,4,5,7,9,11],minor:[0,2,3,5,7,8,10]};
 const DEG={I:0,II:1,III:2,IV:3,V:4,VI:5,VII:6};
 
+// Rhythmic and Accompaniment Profiles for Genres
+const PATTERNS = {
+  pop: { chordDur: 3.8, bassPattern: [0, 1.5, 2.5, 3], kickBeats: [0, 2], snareBeats: [1, 3], hihat16ths: [0, 1, 2, 3, 4, 5, 6, 7] },
+  rock: { chordDur: 3.8, bassPattern: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5], kickBeats: [0, 1.5, 2], snareBeats: [1, 3], hihat16ths: [0,2,4,6] },
+  country: { chordDur: 3.8, bassPattern: [0, 2], kickBeats: [0, 2], snareBeats: [1, 3], hihat16ths: [0, 1, 2, 3, 4, 5, 6, 7] },
+  hiphop: { chordDur: 2.0, bassPattern: [0, 0.75, 2.25, 3], kickBeats: [0, 0.75, 2.5], snareBeats: [1, 3], hihat16ths: [0, 1, 2, 3, 4, 5, 6, 7] },
+  orchestral: { chordDur: 4.0, bassPattern: [0], kickBeats: [0], snareBeats: [], hihat16ths: [] },
+  soundtrack: { chordDur: 4.0, bassPattern: [0, 2], kickBeats: [0, 2], snareBeats: [3], hihat16ths: [0, 2, 4, 6] }
+};
+
 function $(id){return document.getElementById(id)}
 
-function noteArray(roman,key){
-  const match=/^([A-G])([#b]?)[ ]+(major|minor)$/i.exec(key)||["","C","","major"];
-  let pc=ROOTS[match[1].toUpperCase()]||0;
-  if(match[2]==="#")pc++; if(match[2]==="b")pc--;
-  const mode=match[3].toLowerCase(), scale=SCALE[mode];
-  let s=roman.replace(/(maj7|m7|7|dim|sus4|sus2|add9)$/i,"");
-  let accidental=0;if(s[0]==="b"){accidental=-1;s=s.slice(1)}else if(s[0]==="#"){accidental=1;s=s.slice(1)}
-  const degree=(s.toUpperCase()||"I"), idx=DEG[degree]||0;
-  const rootPC=(pc+scale[idx]+accidental+120)%12;
-  
-  let basePitch = 60 + rootPC; 
-  if (basePitch > 71) basePitch -= 12;
+function noteArray(roman, key) {
+  const match = /^([A-G])([#b]?)[ ]+(major|minor)$/i.exec(key) || ["", "C", "", "major"];
+  let pc = ROOTS[match[1].toUpperCase()] || 0;
+  if (match[2] === "#") pc++; if (match[2] === "b") pc--;
+  const mode = match[3].toLowerCase(), scale = SCALE[mode];
 
-  const minor=/^[iv]+/.test(s), seventh=/7/.test(roman), maj7=/maj7/i.test(roman);
-  let ints=maj7?[0,4,7,11]:seventh?[0,4,7,10]:minor?[0,3,7]:[0,4,7];
-  return ints.map(n=>basePitch+n);
+  let raw = roman;
+  let accidental = 0;
+  if (raw[0] === "b") { accidental = -1; raw = raw.slice(1); }
+  else if (raw[0] === "#") { accidental = 1; raw = raw.slice(1); }
+
+  let clean = raw.replace(/(maj7|m7|7|dim|sus4|sus2|add9)$/i, "");
+  const isMinor = /^[iv]+/.test(clean);
+  const degree = clean.toUpperCase() || "I";
+  const idx = DEG[degree] !== undefined ? DEG[degree] : 0;
+
+  const rootPC = (pc + scale[idx] + accidental + 120) % 12;
+  let basePitch = 60 + rootPC;
+  if (basePitch > 70) basePitch -= 12;
+
+  let intervals = [0, 4, 7]; // Default Major
+  if (isMinor) intervals = [0, 3, 7];
+  if (/dim/i.test(raw)) intervals = [0, 3, 6];
+  if (/sus2/i.test(raw)) intervals = [0, 2, 7];
+  if (/sus4/i.test(raw)) intervals = [0, 5, 7];
+  if (/maj7/i.test(raw)) intervals.push(11);
+  else if (/7/i.test(raw)) intervals.push(isMinor ? 10 : 10);
+  if (/add9/i.test(raw)) intervals.push(14);
+
+  return intervals.map(n => basePitch + n);
 }
 
 function progressions(genre){return (CATALOG[genre]||CATALOG.pop).map((r,i)=>({id:genre+"-"+i,name:genre[0].toUpperCase()+genre.slice(1)+" Pattern "+(i+1),roman:r}))}
@@ -155,7 +180,7 @@ function load(p){
   renderPresets();renderArrangement();$("play").disabled=!audioCtx;toast("Loaded "+p.name);
 }
 
-/* ---------- Precise Audio Engine ---------- */
+/* ---------- Audio Engine ---------- */
 async function enableAudio(){
   try{
     const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw Error("Web Audio is not supported.");
@@ -181,10 +206,20 @@ function kick(time){
   if(!audioCtx||muted[3])return;
   const o=audioCtx.createOscillator(),g=audioCtx.createGain();
   o.frequency.setValueAtTime(130,time);
-  o.frequency.exponentialRampToValueAtTime(45,time+.13);
-  g.gain.setValueAtTime(.22,time);
+  o.frequency.exponentialRampToValueAtTime(40,time+.13);
+  g.gain.setValueAtTime(.3,time);
   g.gain.exponentialRampToValueAtTime(.001,time+.18);
   o.connect(g).connect(master);o.start(time);o.stop(time+.2);
+}
+
+function hihat(time){
+  if(!audioCtx||muted[3])return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type="square";
+  o.frequency.setValueAtTime(8000,time);
+  g.gain.setValueAtTime(.015,time);
+  g.gain.exponentialRampToValueAtTime(.0001,time+.03);
+  o.connect(g).connect(master);o.start(time);o.stop(time+.04);
 }
 
 function triggerMeter(idx){
@@ -196,34 +231,44 @@ function scheduleBeat(beatIndex, time){
   if (!blocks.length) return;
   const totalBeats = blocks.length * 4;
   const currentBlockIdx = Math.floor((beatIndex % totalBeats) / 4);
-  const blockBeat = beatIndex % 4;
+  const blockBeat = beatIndex % 4; // 0, 1, 2, 3 inside a block
   const block = blocks[currentBlockIdx];
+  const genre = $("genre").value;
+  const pattern = PATTERNS[genre] || PATTERNS.pop;
+  const secondsPerBeat = 60.0 / bpm;
 
   // 1. Chords
   if (blockBeat === 0) {
-    block.notes.forEach(n => synth(n, time, 1.8, "triangle", 0.045, 0));
+    block.notes.forEach(n => synth(n, time, pattern.chordDur * secondsPerBeat, "triangle", 0.04, 0));
     triggerMeter(0);
   }
 
-  // 2. Bass
-  const isRock = $("genre").value === "rock";
-  if (isRock || blockBeat === 0 || blockBeat === 2) {
-    synth(block.notes[0] - 24, time, 0.25, "sawtooth", 0.03, 1);
-    triggerMeter(1);
-  }
+  // 2. Dynamic Bassline
+  pattern.bassPattern.forEach(offset => {
+    if (offset >= blockBeat && offset < blockBeat + 1) {
+      const bassTime = time + (offset - blockBeat) * secondsPerBeat;
+      const rootBass = block.notes[0] - 24;
+      synth(rootBass, bassTime, 0.3 * secondsPerBeat, "sawtooth", 0.04, 1);
+      triggerMeter(1);
+    }
+  });
 
-  // 3. Melody
-  if (Math.random() > 0.3) {
-    const melNote = block.notes[blockBeat % block.notes.length] + 12;
-    synth(melNote, time, 0.22, "sine", 0.028, 2);
+  // 3. Chord-Aware Melody
+  if (Math.random() > 0.25) {
+    const melIndex = Math.floor(Math.random() * block.notes.length);
+    const melNote = block.notes[melIndex] + 12;
+    synth(melNote, time, 0.3 * secondsPerBeat, "sine", 0.03, 2);
     triggerMeter(2);
   }
 
-  // 4. Drums
-  kick(time);
-  if (blockBeat === 1 || blockBeat === 3) {
-    synth(38, time, 0.08, "square", 0.02, 3);
-  }
+  // 4. Genre Drums
+  if (pattern.kickBeats.includes(blockBeat)) kick(time);
+  if (pattern.snareBeats.includes(blockBeat)) synth(38, time, 0.08, "square", 0.025, 3);
+  pattern.hihat16ths.forEach(sub => {
+    if (sub >= blockBeat * 2 && sub < (blockBeat + 1) * 2) {
+      hihat(time + (sub % 2) * 0.5 * secondsPerBeat);
+    }
+  });
   triggerMeter(3);
 
   setTimeout(() => {
@@ -257,7 +302,7 @@ function stop(){
   $("playStatus").textContent="Stopped";
 }
 
-/* ---------- MIDI export & Import ---------- */
+/* ---------- MIDI Export & Import ---------- */
 function vlq(n){let buffer=n&127,bytes=[];while(n>>=7){buffer<<=8;buffer|=(n&127)|128}for(;;){bytes.push(buffer&255);if(buffer&128)buffer>>=8;else break}return bytes}
 function u32(n){return[(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255]}
 
@@ -288,11 +333,8 @@ function exportMidi(){
 
 function parseMidiFile(buf) {
   const data = new Uint8Array(buf);
-  if (data.length < 14 || String.fromCharCode(...data.slice(0, 4)) !== "MThd") {
-    throw new Error("Invalid MIDI file header");
-  }
-  let pos = 14;
-  const importedNotes = [];
+  if (data.length < 14 || String.fromCharCode(...data.slice(0, 4)) !== "MThd") throw new Error("Invalid MIDI header");
+  let pos = 14, importedNotes = [];
   while (pos < data.length) {
     if (pos + 8 > data.length) break;
     const chunkType = String.fromCharCode(...data.slice(pos, pos + 4));
@@ -306,8 +348,7 @@ function parseMidiFile(buf) {
           let b = data[pos++]; delta = (delta << 7) | (b & 0x7f);
           if (!(b & 0x80)) break;
         }
-        time += delta;
-        if (pos >= end) break;
+        time += delta; if (pos >= end) break;
         let st = data[pos++];
         if (st === 0xff) { pos++; let len = data[pos++]; pos += len; }
         else if (st === 0xf0 || st === 0xf7) { let len = data[pos++]; pos += len; }
@@ -325,13 +366,25 @@ function parseMidiFile(buf) {
   return importedNotes;
 }
 
-/* ---------- Event Wiring ---------- */
+/* ---------- Wiring ---------- */
 $("audio").onclick=enableAudio;
 $("play").onclick=start;
 $("stop").onclick=stop;
 $("random").onclick=function(){const p=progressions($("genre").value)[Math.floor(Math.random()*4)];load(p)};
-$("genre").onchange=function(){selectedId=null;renderPresets()};
-$("key").onchange=function(){if(selectedId){const p=progressions($("genre").value).find(x=>x.id===selectedId);if(p)load(p)}};
+$("genre").onchange=function(){
+  selectedId=null;
+  renderPresets();
+  if(blocks.length && selectedId) {
+    blocks = blocks.map(b => ({ ...b, notes: noteArray(b.roman, $("key").value) }));
+    renderArrangement();
+  }
+};
+$("key").onchange=function(){
+  if(blocks.length) {
+    blocks = blocks.map(b => ({ ...b, notes: noteArray(b.roman, $("key").value) }));
+    renderArrangement();
+  }
+};
 $("bpm").oninput=function(){bpm=Number(this.value);$("bpmText").textContent=bpm};
 document.querySelectorAll(".tracks button").forEach(b=>b.onclick=function(){const i=Number(this.dataset.track);muted[i]=!muted[i];this.textContent=muted[i]?"Unmute":"Mute";});
 $("export").onclick=exportMidi;
