@@ -7,24 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=3">
   <title>ChordFlow — iPad Sequencer</title>
-<script>
-  // Development-safe recovery for older ChordFlow builds that registered a stale
-  // service worker on iPad Safari. This runs before the module graph is loaded.
-  (async () => {
-    try {
-      if ("serviceWorker" in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map((r) => r.unregister()));
-      }
-      if (window.caches) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((key) => caches.delete(key)));
-      }
-    } catch (_) {}
-  })();
-</script>
 </head>
 <body>
   <main id="app" class="app-shell" aria-label="ChordFlow sequencer workspace">
@@ -127,6 +111,6 @@
     <div id="gestureShield" class="gesture-shield" aria-hidden="true"></div>
   </main>
 
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=3"></script>
 </body>
 </html>
