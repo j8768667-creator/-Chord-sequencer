@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <title>ChordFlow — iPad Sequencer</title>
+<script>
+  // Development-safe recovery for older ChordFlow builds that registered a stale
+  // service worker on iPad Safari. This runs before the module graph is loaded.
+  (async () => {
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+    } catch (_) {}
+  })();
+</script>
+</head>
+<body>
+  <main id="app" class="app-shell" aria-label="ChordFlow sequencer workspace">
+    <header class="topbar">
+      <div>
+        <h1>ChordFlow</h1>
+        <p class="subtitle">Multitrack chord progression sequencer</p>
+      </div>
+      <div class="status-cluster">
+        <span id="audioStatus" class="status" role="status">Audio locked</span>
+        <span id="transportStatus" class="status">Stopped</span>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Sequencer controls">
+      <label class="control">
+        <span>Key</span>
+        <select id="keySelect" aria-label="Global key">
+          <option value="C major">C major</option>
+          <option value="G major">G major</option>
+          <option value="D major">D major</option>
+          <option value="A minor">A minor</option>
+          <option value="E minor">E minor</option>
+          <option value="F major">F major</option>
+          <option value="Bb major">Bb major</option>
+        </select>
+      </label>
+
+      <label class="control">
+        <span>Genre</span>
+        <select id="genreSelect" aria-label="Progression genre">
+          <option value="pop">Pop</option>
+          <option value="rock">Rock</option>
+          <option value="country">Country</option>
+          <option value="hiphop">Hip-Hop</option>
+          <option value="orchestral">Orchestral</option>
+          <option value="soundtrack">Soundtrack</option>
+        </select>
+      </label>
+
+      <label class="control bpm-control">
+        <span>BPM <output id="bpmValue">100</output></span>
+        <input id="bpmRange" type="range" min="50" max="180" step="1" value="100" aria-label="Tempo">
+      </label>
+
+      <div class="button-row">
+        <button id="unlockButton" class="primary" type="button">Enable Audio</button>
+        <button id="playButton" type="button" disabled>Play</button>
+        <button id="stopButton" type="button" disabled>Stop</button>
+      </div>
+    </section>
+
+    <section class="progression-panel" aria-label="Progression library">
+      <div class="panel-heading">
+        <h2>Progression Library</h2>
+        <button id="randomizeButton" type="button" disabled>Randomize</button>
+      </div>
+      <div id="progressionGrid" class="progression-grid" aria-live="polite"></div>
+    </section>
+
+    <section class="arrangement-panel" aria-label="Arrangement grid">
+      <div class="panel-heading">
+        <h2>Arrangement</h2>
+        <div class="panel-actions">
+          <label class="file-button">
+            Import MIDI
+            <input id="midiInput" type="file" accept=".mid,.midi,audio/midi" hidden>
+          </label>
+          <button id="exportButton" type="button">Export MIDI</button>
+        </div>
+      </div>
+
+      <div id="blockGrid" class="block-grid" role="list" aria-label="Chord blocks"></div>
+      <p id="importStatus" class="helper-text">Tap a progression to populate the blocks. Long-press and drag are intentionally avoided for Safari stability; use the block controls to reorder.</p>
+    </section>
+
+    <section class="track-panel" aria-label="Track controls">
+      <div class="track-row">
+        <span class="track-name">01 Chords</span>
+        <span class="track-meter" id="meter-chords"></span>
+        <button class="mute-button" data-track="chords" type="button">Mute</button>
+      </div>
+      <div class="track-row">
+        <span class="track-name">02 Bass</span>
+        <span class="track-meter" id="meter-bass"></span>
+        <button class="mute-button" data-track="bass" type="button">Mute</button>
+      </div>
+      <div class="track-row">
+        <span class="track-name">03 Melody</span>
+        <span class="track-meter" id="meter-melody"></span>
+        <button class="mute-button" data-track="melody" type="button">Mute</button>
+      </div>
+      <div class="track-row">
+        <span class="track-name">04 Drums</span>
+        <span class="track-meter" id="meter-drums"></span>
+        <button class="mute-button" data-track="drums" type="button">Mute</button>
+      </div>
+    </section>
+
+    <div id="gestureShield" class="gesture-shield" aria-hidden="true"></div>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

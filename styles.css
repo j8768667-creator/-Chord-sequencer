@@ -1,0 +1,391 @@
+/* iPad/Safari safeguards:
+   - 100svh avoids the dynamic 100vh address-bar jump.
+   - VisualViewport correction is applied by app.js when available.
+   - touch-action: manipulation suppresses double-tap zoom on controls.
+   - 48px minimum hit targets protect touch accuracy.
+*/
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+  --app-height: 100svh;
+  --bg: #0b1020;
+  --panel: #111827;
+  --panel-2: #182235;
+  --border: #2b3850;
+  --text: #f8fafc;
+  --muted: #a8b3c7;
+  --accent: #7dd3fc;
+  --accent-strong: #38bdf8;
+  --danger: #fb7185;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: var(--app-height);
+  background: var(--bg);
+  overscroll-behavior: none;
+}
+
+body {
+  min-height: var(--app-height);
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+select,
+input,
+label.file-button,
+[role="button"] {
+  min-width: 48px;
+  min-height: 48px;
+  touch-action: manipulation;
+}
+
+button,
+select,
+input,
+label.file-button,
+.block-tile {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button,
+select,
+input,
+label.file-button {
+  font: inherit;
+}
+
+button {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #00111a;
+  font-weight: 700;
+}
+
+.app-shell {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: var(--app-height);
+  height: var(--app-height);
+  padding:
+    calc(12px + var(--safe-top))
+    12px
+    calc(12px + var(--safe-bottom));
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.topbar,
+.controls,
+.progression-panel,
+.arrangement-panel,
+.track-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(1.2rem, 3vw, 1.7rem);
+}
+
+h2 {
+  font-size: 1rem;
+}
+
+.subtitle,
+.helper-text {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.status-cluster {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #202b3e;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(130px, 1fr)) auto;
+  gap: 10px;
+  padding: 10px;
+}
+
+.control {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.control select,
+.control input {
+  width: 100%;
+}
+
+select,
+input[type="range"] {
+  accent-color: var(--accent-strong);
+}
+
+.button-row,
+.panel-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.progression-panel,
+.arrangement-panel,
+.track-panel {
+  padding: 12px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.progression-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.progression-card {
+  min-height: 74px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+}
+
+.progression-card strong {
+  color: var(--text);
+}
+
+.progression-card small {
+  color: var(--muted);
+}
+
+.arrangement-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.block-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(112px, 1fr);
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+
+.block-tile {
+  min-height: 110px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-2);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+  align-content: space-between;
+}
+
+.block-tile.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.block-number,
+.block-roman {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.block-chord {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.block-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.block-actions button {
+  min-height: 42px;
+  min-width: 42px;
+  padding: 0.35rem;
+}
+
+.track-panel {
+  display: grid;
+  gap: 6px;
+}
+
+.track-row {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.track-name {
+  font-size: 0.8rem;
+}
+
+.track-meter {
+  height: 8px;
+  border-radius: 99px;
+  background: #243047;
+  overflow: hidden;
+}
+
+.track-meter::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent-strong);
+  transition: width 80ms linear;
+}
+
+.mute-button {
+  min-height: 42px;
+}
+
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+}
+
+.gesture-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: transparent;
+}
+
+@media (max-width: 900px) {
+  .controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .button-row {
+    grid-column: 1 / -1;
+  }
+
+  .progression-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    gap: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .controls {
+    grid-template-columns: 1fr;
+  }
+
+  .button-row {
+    grid-column: auto;
+  }
+
+  .progression-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .track-row {
+    grid-template-columns: 88px 1fr auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
