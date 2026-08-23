@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b1020">
-<title>ChordFlow Pro</title>
+<title>ChordFlow Studio</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#eef2ff;background:#0b1020;color-scheme:dark}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#0b1020}
@@ -36,7 +36,7 @@ input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
 <body>
 <main class="app">
 <header class="panel top">
-  <div><h1>ChordFlow Pro</h1><p>Extended harmonizer & multitrack engine</p></div>
+  <div><h1>ChordFlow Studio</h1><p>Pro Voice-Led Audio Engine with Reverb & Dynamics</p></div>
   <div class="statuses"><span id="audioStatus" class="status">Audio locked</span><span id="playStatus" class="status">Stopped</span></div>
 </header>
 
@@ -45,23 +45,26 @@ input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
     <option>C major</option><option>G major</option><option>D major</option><option>A major</option><option>E major</option><option>F major</option>
     <option>A minor</option><option>E minor</option><option>D minor</option><option>C minor</option>
   </select></label>
-  <label>Genre Style<select id="genre">
-    <option value="pop">Pop / R&B</option><option value="rock">Rock / Alternative</option><option value="hiphop">Neo-Soul / Hip-Hop</option><option value="orchestral">Cinematic / Epic</option>
+  <label>Sound Style<select id="genre">
+    <option value="pop">Lush Rhodes & Warm Bass</option>
+    <option value="hiphop">Lo-Fi Keys & Sub Bass</option>
+    <option value="rock">Driving Acoustic Strings</option>
+    <option value="orchestral">Cinematic Ambient Pad</option>
   </select></label>
-  <label>BPM <span id="bpmText">100</span><input id="bpm" type="range" min="60" max="160" value="100"></label>
-  <button id="audio" class="primary">Enable Audio</button>
-  <button id="play" disabled>Play</button>
+  <label>BPM <span id="bpmText">96</span><input id="bpm" type="range" min="60" max="160" value="96"></label>
+  <button id="audio" class="primary">Enable Audio Engine</button>
+  <button id="play" disabled>Play Studio Mix</button>
   <button id="stop">Stop</button>
 </section>
 
 <section class="panel">
-  <div class="heading"><h2>Extended Chord Sequences</h2><button id="random">Randomize</button></div>
+  <div class="heading"><h2>Extended Sequences</h2><button id="random">Randomize</button></div>
   <div id="presets" class="presets"></div>
 </section>
 
 <section class="panel">
   <div class="heading">
-    <div><h2>Arrangement Timeline</h2><p>Click sequences above or import custom MIDI files to map blocks.</p></div>
+    <div><h2>Arrangement Timeline</h2><p>Auto-voiced progression flow with custom MIDI parsing.</p></div>
     <div><button id="import">Import MIDI</button><button id="export">Export MIDI</button><input id="midi" type="file" accept=".mid,.midi" hidden></div>
   </div>
   <div id="arrangement" class="arrangement"></div>
@@ -80,27 +83,26 @@ input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
 (function(){
 "use strict";
 
-/* Advanced Extended Chord Catalog */
 const CATALOG={
  pop:[
-   {name:"Neo-Pop Emotional", roman:["Iadd9","V/B","vi7","IVmaj7"]},
-   {name:"R&B Groove 9ths", roman:["Imaj9","vi7","ii7","V11"]},
+   {name:"Neo-Soul Smooth 9ths", roman:["Imaj9","vi7","ii7","V11"]},
+   {name:"Pop Emotional Flow", roman:["Iadd9","V/B","vi7","IVmaj7"]},
    {name:"Plagal Resolution", roman:["IVmaj7","I/G","IV/A","I"]}
  ],
- rock:[
-   {name:"Power Drive", roman:["I5","bVII5","IV5","I5"]},
-   {name:"Chromatic Descending", roman:["i","bVII","bVI","V7"]},
-   {name:"Anthem Rock", roman:["I","IV","vi","V"]}
- ],
  hiphop:[
-   {name:"Lo-Fi Chill", roman:["i7","iv7","bVImaj7","V7b9"]},
-   {name:"Jazz-Hop Extensions", roman:["ii7","V7alt","Imaj9","VI7b13"]},
+   {name:"Lo-Fi Chill Hop", roman:["i7","iv7","bVImaj7","V7b9"]},
+   {name:"Jazz-Hop Extended", roman:["ii7","V7alt","Imaj9","VI7b13"]},
    {name:"Soulful D minor Flow", roman:["i9","bVII6","bVImaj7","i7"]}
  ],
+ rock:[
+   {name:"Anthem Rock Drive", roman:["I","IV","vi","V"]},
+   {name:"Power Chord Progression", roman:["I5","bVII5","IV5","I5"]},
+   {name:"Chromatic Descending", roman:["i","bVII","bVI","V7"]}
+ ],
  orchestral:[
-   {name:"Cinematic Hero", roman:["i","bVI","bIII","bVII"]},
-   {name:"Dark Fantasy Suspended", roman:["i","ivsus4","iv","V7"]},
-   {name:"Epic Hybrid", roman:["i","bVImaj7","v7","bVII"]}
+   {name:"Cinematic Ambient", roman:["i","bVImaj7","v7","bVII"]},
+   {name:"Epic Heroic Arc", roman:["i","bVI","bIII","bVII"]},
+   {name:"Dark Fantasy Pad", roman:["i","ivsus4","iv","V7"]}
  ]
 };
 
@@ -110,19 +112,15 @@ const DEG={I:0,II:1,III:2,IV:3,V:4,VI:5,VII:6};
 
 function $(id){return document.getElementById(id)}
 
-function parseChordNotes(symbol, keyStr) {
+/* ---------- Voice Leading & Harmonic Engine ---------- */
+function parseChordNotes(symbol, keyStr, lastNotes=null) {
   const match = /^([A-G])([#b]?)[ ]+(major|minor)$/i.exec(keyStr) || ["", "C", "", "major"];
   let pc = ROOTS[match[1].toUpperCase()] || 0;
   if (match[2] === "#") pc++; if (match[2] === "b") pc--;
   const mode = match[3].toLowerCase(), scale = SCALE[mode];
 
-  let raw = symbol;
-  let slashBass = null;
-  if (raw.includes("/")) {
-    const parts = raw.split("/");
-    raw = parts[0];
-    slashBass = parts[1];
-  }
+  let raw = symbol, slashBass = null;
+  if (raw.includes("/")) { const parts = raw.split("/"); raw = parts[0]; slashBass = parts[1]; }
 
   let accidental = 0;
   if (raw[0] === "b") { accidental = -1; raw = raw.slice(1); }
@@ -135,9 +133,8 @@ function parseChordNotes(symbol, keyStr) {
 
   const rootPC = (pc + scale[idx] + accidental + 120) % 12;
   let basePitch = 60 + rootPC;
-  if (basePitch > 68) basePitch -= 12;
 
-  let intervals = [0, 4, 7]; // Default major triad
+  let intervals = [0, 4, 7];
   if (isMinor) intervals = [0, 3, 7];
   if (symbol.includes("5")) intervals = [0, 7];
   if (symbol.includes("sus2")) intervals = [0, 2, 7];
@@ -145,22 +142,36 @@ function parseChordNotes(symbol, keyStr) {
   if (symbol.includes("7")) intervals.push(isMinor ? 10 : 10);
   if (symbol.includes("maj7")) intervals[3] = 11;
   if (symbol.includes("add9") || symbol.includes("9")) intervals.push(14);
-  if (symbol.includes("11")) intervals.push(17);
 
-  let notes = intervals.map(n => basePitch + n);
+  let rawNotes = intervals.map(n => basePitch + n);
+
+  // Apply smooth voice-leading inversion if a previous chord exists
+  if (lastNotes && lastNotes.length) {
+    const targetMean = lastNotes.reduce((a,b)=>a+b,0)/lastNotes.length;
+    rawNotes = rawNotes.map(p => {
+      while (p - targetMean > 6) p -= 12;
+      while (p - targetMean < -6) p += 12;
+      return p;
+    });
+  } else {
+    rawNotes = rawNotes.map(p => p > 72 ? p - 12 : p);
+  }
 
   if (slashBass) {
-    let bassDegreeIdx = DEG[slashBass.toUpperCase()];
-    if (bassDegreeIdx !== undefined) {
-      let bassPC = (pc + scale[bassDegreeIdx] + 120) % 12;
-      notes.unshift(48 + bassPC);
+    let bassIdx = DEG[slashBass.toUpperCase()];
+    if (bassIdx !== undefined) {
+      let bassPC = (pc + scale[bassIdx] + 120) % 12;
+      rawNotes.unshift(36 + bassPC);
     }
+  } else {
+    rawNotes.unshift(basePitch - 24); // Add sub-bass note
   }
-  return notes;
+
+  return rawNotes.sort((a,b)=>a-b);
 }
 
-/* ---------- App State ---------- */
-let blocks=[], selectedId=null, audioCtx=null, master=null, muted=[false,false,false,false], bpm=100;
+/* ---------- State ---------- */
+let blocks=[], selectedId=null, audioCtx=null, master=null, reverbNode=null, muted=[false,false,false,false], bpm=96;
 let isPlaying=false, currentBeat=0, nextNoteTime=0.0, schedulerTimer=null;
 
 function toast(t){const m=$("message");m.textContent=t;m.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>m.classList.remove("show"),2500)}
@@ -177,7 +188,7 @@ function renderPresets(){
 
 function renderArrangement(){
   const box=$("arrangement");box.replaceChildren();
-  if(!blocks.length){box.className="arrangement empty";box.textContent="No progression loaded. Choose a sequence above or import MIDI.";return}
+  if(!blocks.length){box.className="arrangement empty";box.textContent="Timeline empty. Select a sequence above or import MIDI.";return}
   box.className="arrangement";
   blocks.forEach((b,i)=>{
     const row=document.createElement("div");row.className="block";
@@ -186,101 +197,115 @@ function renderArrangement(){
     const r=document.createElement("div");r.className="roman";r.textContent=b.roman;
     const notes=document.createElement("div");notes.className="notes";notes.textContent="MIDI Pitches: "+b.notes.join(", ");
     info.append(r,notes);
-    const up=document.createElement("button");up.textContent="↑";up.disabled=i===0;up.onclick=function(){[blocks[i-1],blocks[i]]=[blocks[i],blocks[i-1]];renderArrangement()};
-    const down=document.createElement("button");down.textContent="↓";down.disabled=i===blocks.length-1;down.onclick=function(){[blocks[i+1],blocks[i]]=[blocks[i],blocks[i+1]];renderArrangement()};
-    const del=document.createElement("button");del.textContent="✕";del.onclick=function(){blocks.splice(i,1);renderArrangement()};
+    const up=document.createElement("button");up.textContent="↑";up.disabled=i===0;up.onclick=function(){[blocks[i-1],blocks[i]]=[blocks[i],blocks[i-1]];revoiceAll();renderArrangement()};
+    const down=document.createElement("button");down.textContent="↓";down.disabled=i===blocks.length-1;down.onclick=function(){[blocks[i+1],blocks[i]]=[blocks[i],blocks[i+1]];revoiceAll();renderArrangement()};
+    const del=document.createElement("button");del.textContent="✕";del.onclick=function(){blocks.splice(i,1);revoiceAll();renderArrangement()};
     row.append(n,info,up,down,del);box.append(row);
+  });
+}
+
+function revoiceAll(){
+  let last = null;
+  blocks = blocks.map(b => {
+    const notes = parseChordNotes(b.roman, $("key").value, last);
+    last = notes.slice(1);
+    return { ...b, notes };
   });
 }
 
 function loadPreset(p, id){
   selectedId=id;
-  blocks=p.roman.map((r,i)=>({roman:r,notes:parseChordNotes(r,$("key").value),index:i}));
+  let last = null;
+  blocks=p.roman.map((r,i)=>{
+    const notes = parseChordNotes(r,$("key").value, last);
+    last = notes.slice(1);
+    return {roman:r, notes, index:i};
+  });
   renderPresets();renderArrangement();$("play").disabled=!audioCtx;toast("Loaded: "+p.name);
 }
 
-/* ---------- Audio Engine with Anti-Pop Envelopes & Sub-Bass Synthesizer ---------- */
+/* ---------- Advanced Audio Engine (Reverb + Dynamic Envelopes) ---------- */
+function createReverbImpulse(ctx) {
+  const rate = ctx.sampleRate, length = rate * 2.2, impulse = ctx.createBuffer(2, length, rate);
+  for (let c = 0; c < 2; c++) {
+    const data = impulse.getChannelData(c);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2.5);
+    }
+  }
+  return impulse;
+}
+
 async function enableAudio(){
   try{
     const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw Error("Web Audio not supported.");
     if(!audioCtx){
       audioCtx=new AC();
-      master=audioCtx.createGain();
-      master.gain.value=.6;
-      master.connect(audioCtx.destination);
+      master=audioCtx.createGain(); master.gain.value = 0.7;
+      
+      reverbNode = audioCtx.createConvolver();
+      reverbNode.buffer = createReverbImpulse(audioCtx);
+      const wetGain = audioCtx.createGain(); wetGain.gain.value = 0.25;
+      
+      reverbNode.connect(wetGain); wetGain.connect(audioCtx.destination);
+      master.connect(audioCtx.destination); master.connect(reverbNode);
     }
     if(audioCtx.state!=="running")await audioCtx.resume();
-    $("audioStatus").textContent="Audio active";$("audio").textContent="Audio Ready";$("audio").disabled=true;$("play").disabled=!blocks.length;toast("Synthesizer unlocked");
+    $("audioStatus").textContent="Audio Active";$("audio").textContent="Audio Ready";$("audio").disabled=true;$("play").disabled=!blocks.length;toast("Studio Engine Ready");
   }catch(e){toast(e.message)}
 }
 
 function hz(n){return 440*Math.pow(2,(n-69)/12)}
 
-// Anti-pop Polyphonic PolySynth
-function playChordNote(note, time, dur) {
+// Dual-Oscillator Polyphonic Rhodes Synthesizer
+function playRhodesNote(note, time, dur, velocity=0.7) {
   if (!audioCtx || muted[0]) return;
-  const osc = audioCtx.createOscillator();
-  const filter = audioCtx.createBiquadFilter();
-  const gain = audioCtx.createGain();
+  const o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator();
+  const filter = audioCtx.createBiquadFilter(), gain = audioCtx.createGain();
 
-  osc.type = "triangle";
-  osc.frequency.setValueAtTime(hz(note), time);
+  o1.type = "sine"; o1.frequency.setValueAtTime(hz(note), time);
+  o2.type = "triangle"; o2.frequency.setValueAtTime(hz(note) * 2, time); // Harmonics
 
   filter.type = "lowpass";
-  filter.frequency.setValueAtTime(2400, time);
+  filter.frequency.setValueAtTime(1800 * velocity, time);
+  filter.frequency.exponentialRampToValueAtTime(300, time + dur);
 
-  // Soft attack and natural decay envelope
+  // Smooth ADSR Envelope
   gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.linearRampToValueAtTime(0.08, time + 0.04); 
+  gain.gain.linearRampToValueAtTime(0.09 * velocity, time + 0.025); // Anti-click attack
   gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
 
-  osc.connect(filter).connect(gain).connect(master);
-  osc.start(time);
-  osc.stop(time + dur + 0.05);
+  o1.connect(filter); o2.connect(filter);
+  filter.connect(gain); gain.connect(master);
+
+  o1.start(time); o2.start(time);
+  o1.stop(time + dur + 0.05); o2.stop(time + dur + 0.05);
 }
 
-// Thick Sub-Bass Engine (Sine Sub + Lowpassed Sawtooth with Anti-click ramps)
-function playThickBass(note, time, dur) {
+// Deep Sub Bass
+function playSubBass(note, time, dur) {
   if (!audioCtx || muted[1]) return;
-  const sub = audioCtx.createOscillator();
-  const grit = audioCtx.createOscillator();
-  const filter = audioCtx.createBiquadFilter();
-  const gain = audioCtx.createGain();
-
-  const rootPitch = note > 45 ? note - 24 : note - 12;
-
+  const sub = audioCtx.createOscillator(), gain = audioCtx.createGain();
   sub.type = "sine";
-  sub.frequency.setValueAtTime(hz(rootPitch), time);
-
-  grit.type = "sawtooth";
-  grit.frequency.setValueAtTime(hz(rootPitch), time);
-
-  filter.type = "lowpass";
-  filter.frequency.setValueAtTime(380, time);
-  filter.frequency.exponentialRampToValueAtTime(120, time + dur);
+  sub.frequency.setValueAtTime(hz(note), time);
 
   gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.linearRampToValueAtTime(0.22, time + 0.02); // Fast smooth attack
+  gain.gain.linearRampToValueAtTime(0.25, time + 0.03);
   gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
 
-  sub.connect(gain);
-  grit.connect(filter).connect(gain);
-  gain.connect(master);
-
-  sub.start(time); grit.start(time);
-  sub.stop(time + dur + 0.05); grit.stop(time + dur + 0.05);
+  sub.connect(gain); gain.connect(master);
+  sub.start(time); sub.stop(time + dur + 0.05);
 }
 
-function playDrumKick(time) {
+function playSoftKick(time) {
   if (!audioCtx || muted[3]) return;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.frequency.setValueAtTime(120, time);
-  osc.frequency.exponentialRampToValueAtTime(35, time + 0.12);
-  gain.gain.setValueAtTime(0.35, time);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.14);
+  const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+  osc.frequency.setValueAtTime(110, time);
+  osc.frequency.exponentialRampToValueAtTime(30, time + 0.14);
+  gain.gain.setValueAtTime(0.3, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
   osc.connect(gain).connect(master);
-  osc.start(time); osc.stop(time + 0.15);
+  osc.start(time); osc.stop(time + 0.16);
 }
 
 function triggerMeter(idx){
@@ -296,27 +321,32 @@ function scheduleBeat(beatIndex, time){
   const block = blocks[currentBlockIdx];
   const spb = 60.0 / bpm;
 
-  // 1. Chords (Pad voicing)
+  const chordPitches = block.notes.slice(1);
+  const bassPitch = block.notes[0];
+
+  // 1. Smooth Stranded Chords
   if (blockBeat === 0) {
-    block.notes.forEach(n => playChordNote(n, time, spb * 3.8));
+    chordPitches.forEach((n, idx) => playRhodesNote(n, time + idx * 0.02, spb * 3.8, 0.7));
     triggerMeter(0);
+  } else if (blockBeat === 2 && Math.random() > 0.4) {
+    chordPitches.forEach((n, idx) => playRhodesNote(n, time + idx * 0.015, spb * 1.8, 0.45));
   }
 
-  // 2. Thick Bass
-  if (blockBeat === 0 || blockBeat === 2) {
-    playThickBass(block.notes[0], time, spb * 1.8);
+  // 2. Deep Sub Bass Syncopation
+  if (blockBeat === 0 || blockBeat === 2.5) {
+    playSubBass(bassPitch, time, spb * 1.8);
     triggerMeter(1);
   }
 
   // 3. Arpeggiated Melody
-  if (Math.random() > 0.2) {
-    const p = block.notes[blockBeat % block.notes.length] + 12;
-    playChordNote(p, time, spb * 0.5);
+  if (blockBeat % 1 === 0 && Math.random() > 0.3) {
+    const melPitch = chordPitches[blockBeat % chordPitches.length] + 12;
+    playRhodesNote(melPitch, time + 0.1, spb * 0.6, 0.5);
     triggerMeter(2);
   }
 
-  // 4. Drums
-  if (blockBeat === 0 || blockBeat === 2) playDrumKick(time);
+  // 4. Kick Drums
+  if (blockBeat === 0 || blockBeat === 2) playSoftKick(time);
   triggerMeter(3);
 
   setTimeout(() => {
@@ -334,7 +364,7 @@ function scheduler(){
 }
 
 function start(){
-  if(!audioCtx||audioCtx.state!=="running"){toast("Enable Audio first!");return}
+  if(!audioCtx||audioCtx.state!=="running"){toast("Enable Audio Engine first!");return}
   if(!blocks.length){toast("Load a sequence first!");return}
   stop();
   isPlaying = true; currentBeat = 0;
@@ -347,7 +377,7 @@ function stop(){
   isPlaying = false; $("playStatus").textContent="Stopped";
 }
 
-/* ---------- Quantized Beat-Matching MIDI Parser & Exporter ---------- */
+/* ---------- MIDI File Exporter & Parser ---------- */
 function vlq(n){let buffer=n&127,bytes=[];while(n>>=7){buffer<<=8;buffer|=(n&127)|128}for(;;){bytes.push(buffer&255);if(buffer&128)buffer>>=8;else break}return bytes}
 function u32(n){return[(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255]}
 
@@ -365,31 +395,27 @@ function exportMidi(){
   if(!blocks.length){toast("Load a progression first");return}
   const chords=[],bass=[];
   blocks.forEach((b,i)=>{
-    b.notes.forEach(n=>chords.push({time:i*4,duration:3.8,pitch:n,velocity:.65}));
-    bass.push({time:i*4,duration:3.8,pitch:b.notes[0]-24,velocity:.8});
+    b.notes.slice(1).forEach(n=>chords.push({time:i*4,duration:3.8,pitch:n,velocity:.65}));
+    bass.push({time:i*4,duration:3.8,pitch:b.notes[0],velocity:.8});
   });
   const tracks=[makeTrack(chords,0),makeTrack(bass,1)];
   let bytes=[77,84,104,100,0,0,0,6,0,1,0,2,1,224];
   tracks.forEach(t=>bytes.push(77,84,114,107,...u32(t.length),...t));
-  const url=URL.createObjectURL(new Blob([new Uint8Array(bytes)],{type:"audio/midi"})),a=document.createElement("a");a.href=url;a.download="chordflow_pro.mid";document.body.appendChild(a);a.click();a.remove();
+  const url=URL.createObjectURL(new Blob([new Uint8Array(bytes)],{type:"audio/midi"})),a=document.createElement("a");a.href=url;a.download="chordflow_studio.mid";document.body.appendChild(a);a.click();a.remove();
 }
 
 function parseMidiFile(buf) {
   const data = new Uint8Array(buf);
   if (data.length < 14 || String.fromCharCode(...data.slice(0, 4)) !== "MThd") throw new Error("Invalid MIDI Header");
-  
   let division = (data[12] << 8) | data[13];
   let ticksPerBeat = (division & 0x8000) === 0 ? division : 480;
-
-  let pos = 14;
-  let parsedEvents = [];
+  let pos = 14, parsedEvents = [];
 
   while (pos < data.length) {
     if (pos + 8 > data.length) break;
     const chunkType = String.fromCharCode(...data.slice(pos, pos + 4));
     const chunkSize = (data[pos+4]<<24) | (data[pos+5]<<16) | (data[pos+6]<<8) | data[pos+7];
     pos += 8;
-
     if (chunkType === "MTrk") {
       let end = pos + chunkSize, absTicks = 0;
       while (pos < end) {
@@ -415,7 +441,6 @@ function parseMidiFile(buf) {
     } else { pos += chunkSize; }
   }
 
-  // Quantize events into 4-beat block windows
   let beatMap = {};
   parsedEvents.forEach(e => {
     let blockIdx = Math.floor(e.beat / 4);
@@ -424,22 +449,17 @@ function parseMidiFile(buf) {
   });
 
   return Object.keys(beatMap).map(idx => ({
-    roman: "Imported Chord " + (parseInt(idx) + 1),
-    notes: Array.from(beatMap[idx]).slice(0, 5)
+    roman: "MIDI Block " + (parseInt(idx) + 1),
+    notes: Array.from(beatMap[idx]).sort((a,b)=>a-b).slice(0, 5)
   }));
 }
 
-/* ---------- Event Wiring ---------- */
+/* ---------- Wiring ---------- */
 $("audio").onclick=enableAudio;
 $("play").onclick=start;
 $("stop").onclick=stop;
 $("genre").onchange=function(){selectedId=null;renderPresets()};
-$("key").onchange=function(){
-  if(blocks.length) {
-    blocks = blocks.map(b => ({ ...b, notes: parseChordNotes(b.roman, $("key").value) }));
-    renderArrangement();
-  }
-};
+$("key").onchange=function(){ revoiceAll(); renderArrangement(); };
 $("bpm").oninput=function(){bpm=Number(this.value);$("bpmText").textContent=bpm};
 document.querySelectorAll(".tracks button").forEach(b=>b.onclick=function(){
   const i=Number(this.dataset.track);muted[i]=!muted[i];this.textContent=muted[i]?"Unmute":"Mute";
@@ -453,10 +473,10 @@ $("midi").onchange=function(){
     reader.onload = function(e){
       try {
         const importedBlocks = parseMidiFile(e.target.result);
-        if(!importedBlocks.length) throw new Error("No MIDI note data parsed.");
+        if(!importedBlocks.length) throw new Error("No MIDI note data found.");
         blocks = importedBlocks;
         renderArrangement();
-        toast("Parsed " + importedBlocks.length + " chord blocks from MIDI");
+        toast("Parsed " + importedBlocks.length + " chord blocks");
       } catch(err) { toast(err.message); }
     };
     reader.readAsArrayBuffer(f);
