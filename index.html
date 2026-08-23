@@ -40,7 +40,7 @@ input[type=range]{width:100%;min-height:40px;accent-color:#35b9f2}
 <body>
 <main class="app">
 <header class="panel top">
-  <div><h1>ChordFlow Studio Pro</h1><p>Dynamic Expressive Voice-Leading & Validated MIDI DAW Engine</p></div>
+  <div><h1>ChordFlow Studio Pro</h1><p>Expressive Voice-Leading & Validated MIDI Export Engine</p></div>
   <div class="statuses"><span id="audioStatus" class="status">Audio Locked</span><span id="playStatus" class="status">Stopped</span></div>
 </header>
 
@@ -101,7 +101,7 @@ input[type=range]{width:100%;min-height:40px;accent-color:#35b9f2}
       <button id="inlineStop" class="danger">■ Stop</button>
       <button id="clearBtn">Clear Grid</button>
       <button id="importBtn">Import MIDI</button>
-      <button id="exportBtn" class="primary">Export MIDI</button>
+      <button id="exportBtn" class="primary">Export Validated MIDI</button>
       <input id="midiInput" type="file" accept=".mid,.midi" hidden>
     </div>
   </div>
@@ -141,7 +141,7 @@ const DEG = {I:0,II:1,III:2,IV:3,V:4,VI:5,VII:6};
 
 function $(id){ return document.getElementById(id); }
 
-/* ---------- Smooth Voice-Leading Engine ---------- */
+/* ---------- Voice-Leading Engine ---------- */
 function parseChordNotes(symbol, rootStr, scaleModeStr, prevChordPitches = null) {
   let pc = ROOTS[rootStr] !== undefined ? ROOTS[rootStr] : 0;
   const scale = SCALES[scaleModeStr] || SCALES.major;
@@ -166,13 +166,12 @@ function parseChordNotes(symbol, rootStr, scaleModeStr, prevChordPitches = null)
   if (symbol.includes("5")) intervals = [0, 7];
   if (symbol.includes("sus2")) intervals = [0, 2, 7];
   if (symbol.includes("sus4")) intervals = [0, 5, 7];
-  if (symbol.includes("7")) intervals.push(isMinor ? 10 : 10);
+  if (symbol.includes("7")) intervals.push(10);
   if (symbol.includes("maj7")) intervals[3] = 11;
   if (symbol.includes("add9") || symbol.includes("9")) intervals.push(14);
 
   let chordPitches = intervals.map(n => basePitch + n);
 
-  // Smooth Voice-Leading Inversion Shift
   if (prevChordPitches && prevChordPitches.length) {
     const targetMean = prevChordPitches.reduce((a, b) => a + b, 0) / prevChordPitches.length;
     chordPitches = chordPitches.map(p => {
@@ -184,18 +183,16 @@ function parseChordNotes(symbol, rootStr, scaleModeStr, prevChordPitches = null)
     chordPitches = chordPitches.map(p => p > 72 ? p - 12 : p);
   }
 
-  // Voice Root Bass Line
   let bassPitch = basePitch - 24;
   if (slashBass) {
     let bassIdx = DEG[slashBass.toUpperCase()];
     if (bassIdx !== undefined) bassPitch = 36 + ((pc + scale[bassIdx] + 120) % 12);
   }
 
-  let finalSet = [bassPitch, ...chordPitches];
-  return finalSet.sort((a,b)=>a-b);
+  return [bassPitch, ...chordPitches].sort((a,b)=>a-b);
 }
 
-/* ---------- State ---------- */
+/* ---------- App State ---------- */
 let blocks = [], selectedId = null, audioCtx = null, master = null, reverbNode = null, muted = [false,false,false,false], bpm = 96;
 let isPlaying = false, currentBeat = 0, nextNoteTime = 0.0, schedulerTimer = null;
 
@@ -271,79 +268,119 @@ function clearTimeline(){
   toast("Grid Cleared!");
 }
 
-/* ---------- Fully Playable MIDI Export & Parsing Engine ---------- */
-function encodeVarInt(value) {
-  let buffer = [];
-  let num = value;
-  while (true) {
-    buffer.unshift(num & 0x7F);
-    num >>= 7;
-    if (num <= 0) break;
+/* ---------- Binary Stream MIDI Writer ---------- */
+class BinaryWriter {
+  constructor() {
+    this.buffer = [];
   }
-  for (let i = 0; i < buffer.length - 1; i++) buffer[i] |= 0x80;
-  return buffer;
+  writeByte(b) {
+    this.buffer.push(b & 0xFF);
+  }
+  writeBytes(arr) {
+    for (let i = 0; i < arr.length; i++) this.writeByte(arr[i]);
+  }
+  writeString(str) {
+    for (let i = 0; i < str.length; i++) this.writeByte(str.charCodeAt(i));
+  }
+  writeUInt16(val) {
+    this.writeByte((val >> 8) & 0xFF);
+    this.writeByte(val & 0xFF);
+  }
+  writeUInt32(val) {
+    this.writeByte((val >> 24) & 0xFF);
+    this.writeByte((val >> 16) & 0xFF);
+    this.writeByte((val >> 8) & 0xFF);
+    this.writeByte(val & 0xFF);
+  }
+  writeVarInt(val) {
+    let buffer = [val & 0x7F];
+    while ((val >>= 7) > 0) {
+      buffer.unshift((val & 0x7F) | 0x80);
+    }
+    this.writeBytes(buffer);
+  }
+  getBytes() {
+    return new Uint8Array(this.buffer);
+  }
 }
 
 function exportMIDIFile() {
   if (!blocks.length) { toast("No progression to export!"); return; }
 
   const ppq = 480;
-  let trackEvents = [];
+  const chordDurationTicks = ppq * 4; // 1 bar (4 beats) per chord
 
-  // Meta Tempo Event
+  const track = new BinaryWriter();
+
+  // 1. Set Tempo Meta Event (Delta Time = 0)
   const mpqn = Math.round(60000000 / bpm);
-  trackEvents.push(0x00, 0xFF, 0x51, 0x03, (mpqn >> 16) & 0xFF, (mpqn >> 8) & 0xFF, mpqn & 0xFF);
+  track.writeVarInt(0);
+  track.writeByte(0xFF);
+  track.writeByte(0x51);
+  track.writeByte(0x03);
+  track.writeByte((mpqn >> 16) & 0xFF);
+  track.writeByte((mpqn >> 8) & 0xFF);
+  track.writeByte(mpqn & 0xFF);
 
-  // Instrument Initializers (Program Change 0x00 = Acoustic Grand Piano, Controller CC 7 = 100 Volume, CC 10 = 64 Pan)
-  trackEvents.push(0x00, 0xC0, 0x00); 
-  trackEvents.push(0x00, 0xB0, 0x07, 0x64); 
-  trackEvents.push(0x00, 0xB0, 0x0A, 0x40); 
+  // 2. Program Change - Acoustic Grand Piano (Delta Time = 0)
+  track.writeVarInt(0);
+  track.writeByte(0xC0);
+  track.writeByte(0x00);
 
-  // Reset Controllers Event (CC 121)
-  trackEvents.push(0x00, 0xB0, 0x79, 0x00);
-
-  const chordTicks = ppq * 4;
+  // 3. Generate Sequence Events
   blocks.forEach((b) => {
     const notes = b.notes;
-    // Note ON Events (Delta = 0 for simultaneous polyphonic strike)
-    notes.forEach((pitch, idx) => {
-      trackEvents.push(...encodeVarInt(idx === 0 ? 0 : 0), 0x90, pitch, 0x64);
+
+    // Note On for all chord pitches
+    notes.forEach((pitch, i) => {
+      track.writeVarInt(0); // Play simultaneously
+      track.writeByte(0x90);
+      track.writeByte(pitch & 0x7F);
+      track.writeByte(0x64); // Velocity 100
     });
 
-    // Note OFF Events
-    notes.forEach((pitch, idx) => {
-      trackEvents.push(...encodeVarInt(idx === 0 ? chordTicks : 0), 0x80, pitch, 0x00);
+    // Note Off for all chord pitches
+    notes.forEach((pitch, i) => {
+      // Delta time of full bar applied to first Note Off, subsequent ones delta = 0
+      track.writeVarInt(i === 0 ? chordDurationTicks : 0);
+      track.writeByte(0x80);
+      track.writeByte(pitch & 0x7F);
+      track.writeByte(0x00);
     });
   });
 
-  // End of Track Meta Event
-  trackEvents.push(0x00, 0xFF, 0x2F, 0x00);
+  // 4. End of Track Meta Event
+  track.writeVarInt(0);
+  track.writeByte(0xFF);
+  track.writeByte(0x2F);
+  track.writeByte(0x00);
 
-  // Type 0 Single Track File Header
-  const header = [
-    0x4D, 0x74, 0x68, 0x64,
-    0x00, 0x00, 0x00, 0x06,
-    0x00, 0x00, // Format 0
-    0x00, 0x01, // 1 Track
-    (ppq >> 8) & 0xFF, ppq & 0xFF
-  ];
+  const trackData = track.getBytes();
 
-  const tLen = trackEvents.length;
-  const trackHeader = [
-    0x4D, 0x74, 0x72, 0x6B,
-    (tLen >> 24) & 0xFF, (tLen >> 16) & 0xFF, (tLen >> 8) & 0xFF, tLen & 0xFF
-  ];
+  // Assemble Standard Format 0 Header
+  const header = new BinaryWriter();
+  header.writeString("MThd");
+  header.writeUInt32(6); // Header length
+  header.writeUInt16(0); // Format 0
+  header.writeUInt16(1); // 1 Track
+  header.writeUInt16(ppq); // PPQ Division
 
-  const midiBuffer = new Uint8Array([...header, ...trackHeader, ...trackEvents]);
-  const blob = new Blob([midiBuffer], { type: "audio/midi" });
+  header.writeString("MTrk");
+  header.writeUInt32(trackData.length);
+
+  const finalBuffer = new Uint8Array(header.getBytes().length + trackData.length);
+  finalBuffer.set(header.getBytes(), 0);
+  finalBuffer.set(trackData, header.getBytes().length);
+
+  const blob = new Blob([finalBuffer], { type: "audio/midi" });
   const url = URL.createObjectURL(blob);
-  
+
   const a = document.createElement("a");
   a.href = url;
-  a.download = "ChordFlow_Playable.mid";
+  a.download = "ChordFlow_Validated.mid";
   a.click();
   URL.revokeObjectURL(url);
-  toast("MIDI File Exported & Validated!");
+  toast("Standard MIDI File Exported!");
 }
 
 function parseMIDIFile(arrayBuffer) {
@@ -358,7 +395,7 @@ function parseMIDIFile(arrayBuffer) {
 
   if (readString(4) !== "MThd") { toast("Invalid MIDI File Format!"); return; }
   offset += 4;
-  const format = data.getUint16(offset); offset += 2;
+  offset += 2; // skip format
   const tracksCount = data.getUint16(offset); offset += 2;
   const division = data.getUint16(offset); offset += 2;
 
@@ -394,7 +431,7 @@ function parseMIDIFile(arrayBuffer) {
       if (command === 0x90) {
         const pitch = data.getUint8(offset++);
         const vel = data.getUint8(offset++);
-        if (vel > 0) allNotes.push({ pitch, ticks: absoluteTicks, vel });
+        if (vel > 0) allNotes.push({ pitch, ticks: absoluteTicks });
       } else if (command === 0x80) {
         offset += 2;
       } else if (status === 0xFF) {
@@ -412,7 +449,7 @@ function parseMIDIFile(arrayBuffer) {
     }
   }
 
-  if (!allNotes.length) { toast("No note data found in file."); return; }
+  if (!allNotes.length) { toast("No valid note events found."); return; }
 
   allNotes.sort((a,b) => a.ticks - b.ticks);
   let parsedBlocks = [], currentGroup = [], lastTicks = -1;
@@ -442,7 +479,7 @@ function parseMIDIFile(arrayBuffer) {
   toast("Imported " + blocks.length + " Chords!");
 }
 
-/* ---------- Expressive Audio Engine ---------- */
+/* ---------- Audio Synth Engine ---------- */
 function createReverbImpulse(ctx) {
   const rate = ctx.sampleRate, length = rate * 2.0, impulse = ctx.createBuffer(2, length, rate);
   for (let c = 0; c < 2; c++) {
@@ -472,7 +509,7 @@ async function enableAudio(){
     if(audioCtx.state !== "running") await audioCtx.resume();
     $("audioStatus").textContent = "Audio Active"; $("audio").textContent = "Audio Ready"; $("audio").disabled = true;
     if (blocks.length) $("inlinePlay").disabled = false;
-    toast("Expressive Audio Engine Activated");
+    toast("Audio Engine Ready");
   }catch(e){ toast(e.message); }
 }
 
@@ -483,8 +520,7 @@ function playPolyNote(note, time, dur, velocity=0.7, style="legato") {
   const o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator();
   const filter = audioCtx.createBiquadFilter(), gain = audioCtx.createGain();
 
-  const humanJitter = (Math.random() - 0.5) * 0.005;
-  time = Math.max(audioCtx.currentTime, time + humanJitter);
+  time = Math.max(audioCtx.currentTime, time);
 
   let attack = 0.015, cutoff = 2200;
   if (style === "staccato") { dur = Math.min(dur, 0.2); attack = 0.003; cutoff = 2800; }
@@ -539,7 +575,7 @@ function triggerMeter(idx){
   setTimeout(() => el.style.width = "0", 120);
 }
 
-/* ---------- Micro-Timed Rhythmic Scheduler ---------- */
+/* ---------- Sequencer ---------- */
 function scheduleBeat(beatIndex, time){
   if (!blocks.length) return;
   const totalBeats = blocks.length * 4;
@@ -553,13 +589,11 @@ function scheduleBeat(beatIndex, time){
   const swingPct = Number($("swing").value) / 100.0;
   const strumSpeedMs = Number($("strumSpeed").value) / 1000.0;
 
-  let swingOffset = 0;
-  if (blockBeat % 1 !== 0) swingOffset = (spb * 0.5) * (swingPct * 0.4);
+  let swingOffset = (blockBeat % 1 !== 0) ? (spb * 0.5) * (swingPct * 0.4) : 0;
   const adjustedTime = time + swingOffset;
 
   const chordPitches = block.notes.slice(1);
   const bassPitch = block.notes[0] || (chordPitches[0] ? chordPitches[0] - 24 : 36);
-
   const isAccent = (blockBeat === 0 || blockBeat === 2);
   const baseVelocity = isAccent ? 0.85 : 0.62;
 
@@ -571,7 +605,7 @@ function scheduleBeat(beatIndex, time){
 
     for (let sub = 0; sub < 4; sub++) {
       const subTime = adjustedTime + (sub * (spb / 4));
-      const subVel = (sub === 0) ? baseVelocity : baseVelocity * (0.68 + Math.random() * 0.2);
+      const subVel = (sub === 0) ? baseVelocity : baseVelocity * 0.7;
       const pitch = pitchList[(Math.floor(beatIndex * 4) + sub) % pitchList.length];
       if (pitch) playPolyNote(pitch, subTime, spb * 0.35, subVel, "arp");
     }
@@ -579,32 +613,23 @@ function scheduleBeat(beatIndex, time){
 
   } else if (style === "strum") {
     if (isAccent) {
-      const isUpstroke = (blockBeat === 2);
-      const strumedNotes = isUpstroke ? [...chordPitches].reverse() : chordPitches;
-      
+      const strumedNotes = (blockBeat === 2) ? [...chordPitches].reverse() : chordPitches;
       strumedNotes.forEach((n, idx) => {
         const strumDelay = Math.pow(idx, 1.1) * strumSpeedMs;
-        const noteVel = baseVelocity * (1.0 - idx * 0.04);
-        playPolyNote(n, adjustedTime + strumDelay, spb * 1.8, noteVel, "strum");
+        playPolyNote(n, adjustedTime + strumDelay, spb * 1.8, baseVelocity, "strum");
       });
       triggerMeter(0);
     }
 
   } else if (style === "staccato") {
     if (blockBeat % 1 === 0) {
-      chordPitches.forEach((n) => {
-        const vel = baseVelocity * (0.85 + Math.random() * 0.2);
-        playPolyNote(n, adjustedTime, spb * 0.2, vel, "staccato");
-      });
+      chordPitches.forEach((n) => playPolyNote(n, adjustedTime, spb * 0.2, baseVelocity, "staccato"));
       triggerMeter(0);
     }
 
   } else {
     if (blockBeat === 0) {
-      chordPitches.forEach((n, idx) => {
-        const strumDelay = idx * 0.012;
-        playPolyNote(n, adjustedTime + strumDelay, spb * 3.8, baseVelocity, "legato");
-      });
+      chordPitches.forEach((n, idx) => playPolyNote(n, adjustedTime + (idx * 0.012), spb * 3.8, baseVelocity, "legato"));
       triggerMeter(0);
     }
   }
@@ -612,12 +637,6 @@ function scheduleBeat(beatIndex, time){
   if (blockBeat === 0 || blockBeat === 2.5) {
     playSubBass(bassPitch, adjustedTime, spb * 1.6, baseVelocity);
     triggerMeter(1);
-  }
-
-  if (blockBeat % 1 === 0 && Math.random() > 0.45 && chordPitches.length) {
-    const melPitch = chordPitches[blockBeat % chordPitches.length] + 12;
-    playPolyNote(melPitch, adjustedTime + (spb * 0.5), spb * 0.4, baseVelocity * 0.65, style);
-    triggerMeter(2);
   }
 
   if (isAccent) playPercussion(adjustedTime, baseVelocity);
@@ -651,7 +670,7 @@ function stop(){
   isPlaying = false; $("playStatus").textContent = "Stopped";
 }
 
-/* ---------- Event Handlers ---------- */
+/* ---------- Setup Controls ---------- */
 $("audio").onclick = enableAudio;
 $("inlinePlay").onclick = start;
 $("inlineStop").onclick = stop;
