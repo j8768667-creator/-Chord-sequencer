@@ -18,7 +18,8 @@ button.primary{background:#35b9f2;color:#07111c;border:0;font-weight:700}
 .panel{border:1px solid #293654;border-radius:22px;background:#11182a;padding:18px;margin-bottom:16px;box-shadow:0 8px 30px #0003}
 .top{display:flex;justify-content:space-between;align-items:center;gap:16px}.top h1{margin:0;font-size:30px}.top p{margin:4px 0 0;color:#9da8be}
 .statuses{display:flex;gap:8px;flex-wrap:wrap}.status{padding:12px 15px;border-radius:999px;background:#1d273b;color:#aeb8cb}
-.controls{display:grid;grid-template-columns:repeat(4, 1fr) auto auto;gap:12px;align-items:end}
+.controls{display:grid;grid-template-columns:repeat(3, 1fr) auto auto;gap:12px;align-items:end}
+.controls-secondary{display:grid;grid-template-columns:repeat(4, 1fr);gap:12px;margin-top:12px;align-items:end}
 label{display:grid;gap:7px;color:#9da8be}select{background:#20202a;border:1px solid #39435a;border-radius:15px;padding:0 12px;color:#fff}
 input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
 .heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.heading h2{margin:0;font-size:20px}.heading p{margin:5px 0 0;color:#9da8be}
@@ -29,44 +30,58 @@ input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
 .block .roman{font-weight:700}.block .notes{color:#9da8be;font-size:13px;margin-top:4px}
 .tracks>div{display:grid;grid-template-columns:120px 1fr 80px;gap:12px;align-items:center;margin:12px 0}.meter{height:10px;border-radius:10px;background:#24324c;overflow:hidden}.meter i{display:block;width:0;height:100%;background:#35b9f2}
 .message{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translate(-50%,150%);background:#172238;border:1px solid #33405a;padding:13px 18px;border-radius:14px;transition:transform .2s;z-index:20;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}.message.show{transform:translate(-50%,0)}
-@media(max-width:1050px){.controls{grid-template-columns:1fr 1fr}}
-@media(max-width:620px){.top{align-items:flex-start;flex-direction:column}.controls{grid-template-columns:1fr}.heading{align-items:flex-start;flex-direction:column}.tracks>div{grid-template-columns:85px 1fr 76px}.block{grid-template-columns:30px 1fr auto auto auto}}
+@media(max-width:1050px){.controls,.controls-secondary{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.top{align-items:flex-start;flex-direction:column}.controls,.controls-secondary{grid-template-columns:1fr}.heading{align-items:flex-start;flex-direction:column}.tracks>div{grid-template-columns:85px 1fr 76px}.block{grid-template-columns:30px 1fr auto auto auto}}
 </style>
 </head>
 <body>
 <main class="app">
 <header class="panel top">
-  <div><h1>ChordFlow Studio</h1><p>Voice-Led Engine + Dynamic Articulation & Scale Controls</p></div>
+  <div><h1>ChordFlow Studio Pro</h1><p>Expressive Humanized Audio Engine with Dynamic Articulation</p></div>
   <div class="statuses"><span id="audioStatus" class="status">Audio Locked</span><span id="playStatus" class="status">Stopped</span></div>
 </header>
 
-<section class="panel controls">
-  <label>Root Pitch<select id="rootKey">
-    <option value="C">C</option><option value="C#">C# / Db</option><option value="D">D</option><option value="D#">D# / Eb</option>
-    <option value="E">E</option><option value="F">F</option><option value="F#">F# / Gb</option><option value="G">G</option>
-    <option value="G#">G# / Ab</option><option value="A">A</option><option value="A#">A# / Bb</option><option value="B">B</option>
-  </select></label>
+<section class="panel">
+  <div class="controls">
+    <label>Root Pitch<select id="rootKey">
+      <option value="C">C</option><option value="C#">C# / Db</option><option value="D">D</option><option value="D#">D# / Eb</option>
+      <option value="E">E</option><option value="F">F</option><option value="F#">F# / Gb</option><option value="G">G</option>
+      <option value="G#">G# / Ab</option><option value="A">A</option><option value="A#">A# / Bb</option><option value="B">B</option>
+    </select></label>
 
-  <label>Scale / Mode<select id="scaleMode">
-    <option value="major">Major (Ionian)</option>
-    <option value="minor">Natural Minor (Aeolian)</option>
-    <option value="dorian">Dorian Mode</option>
-    <option value="mixolydian">Mixolydian Mode</option>
-    <option value="lydian">Lydian Mode</option>
-    <option value="phrygian">Phrygian Mode</option>
-  </select></label>
+    <label>Scale / Mode<select id="scaleMode">
+      <option value="major">Major (Ionian)</option>
+      <option value="minor">Natural Minor (Aeolian)</option>
+      <option value="dorian">Dorian Mode</option>
+      <option value="mixolydian">Mixolydian Mode</option>
+      <option value="lydian">Lydian Mode</option>
+      <option value="phrygian">Phrygian Mode</option>
+    </select></label>
 
-  <label>Articulation Style<select id="articulation">
-    <option value="legato">Lush Legato (Sustained)</option>
-    <option value="staccato">Short Staccato (Tight)</option>
-    <option value="strum">Plucked Strum (Acoustic)</option>
-    <option value="arp">Arpeggiated (Flowing)</option>
-  </select></label>
+    <label>Tempo (BPM) <span id="bpmText">96</span><input id="bpm" type="range" min="40" max="200" value="96"></label>
+    <button id="audio" class="primary">Enable Audio</button>
+    <button id="play" disabled>Play Mix</button>
+    <button id="stop">Stop</button>
+  </div>
 
-  <label>Tempo (BPM) <span id="bpmText">96</span><input id="bpm" type="range" min="40" max="200" value="96"></label>
-  <button id="audio" class="primary">Enable Audio</button>
-  <button id="play" disabled>Play Mix</button>
-  <button id="stop">Stop</button>
+  <div class="controls-secondary">
+    <label>Articulation Style<select id="articulation">
+      <option value="legato">Lush Legato (Sustained Pads)</option>
+      <option value="staccato">Natural Staccato (Keys)</option>
+      <option value="strum">Acoustic Strum (Humanized)</option>
+      <option value="arp">Arpeggiated (Dynamic Flow)</option>
+    </select></label>
+
+    <label>Arp Direction<select id="arpPattern">
+      <option value="up">Ascending (Up)</option>
+      <option value="down">Descending (Down)</option>
+      <option value="updown">Bounce (Up-Down)</option>
+      <option value="random">Randomized</option>
+    </select></label>
+
+    <label>Humanization / Swing <span id="swingText">35%</span><input id="swing" type="range" min="0" max="80" value="35"></label>
+    <label>Strum Speed <span id="strumText">45ms</span><input id="strumSpeed" type="range" min="15" max="100" value="45"></label>
+  </div>
 </section>
 
 <section class="panel">
@@ -76,14 +91,14 @@ input[type=range]{width:100%;min-height:48px;accent-color:#35b9f2}
 
 <section class="panel">
   <div class="heading">
-    <div><h2>Arrangement Timeline</h2><p>Auto-voiced progression flow with live mode shift and articulation adjustment.</p></div>
+    <div><h2>Arrangement Timeline</h2><p>Auto-voiced progression flow with expressive articulation controls.</p></div>
     <div><button id="import">Import MIDI</button><button id="export">Export MIDI</button><input id="midi" type="file" accept=".mid,.midi" hidden></div>
   </div>
   <div id="arrangement" class="arrangement"></div>
 </section>
 
 <section class="panel tracks">
-  <div><span>01 Chords</span><div class="meter"><i id="m0"></i></div><button data-track="0">Mute</button></div>
+  <div><span>01 Keys/Chords</span><div class="meter"><i id="m0"></i></div><button data-track="0">Mute</button></div>
   <div><span>02 Sub Bass</span><div class="meter"><i id="m1"></i></div><button data-track="1">Mute</button></div>
   <div><span>03 Melody</span><div class="meter"><i id="m2"></i></div><button data-track="2">Mute</button></div>
   <div><span>04 Percussion</span><div class="meter"><i id="m3"></i></div><button data-track="3">Mute</button></div>
@@ -105,16 +120,6 @@ const CATALOG={
    {name:"Lo-Fi Chill Hop", roman:["i7","iv7","bVImaj7","V7b9"]},
    {name:"Jazz-Hop Extended", roman:["ii7","V7alt","Imaj9","VI7b13"]},
    {name:"Soulful Minor Flow", roman:["i9","bVII6","bVImaj7","i7"]}
- ],
- rock:[
-   {name:"Anthem Rock Drive", roman:["I","IV","vi","V"]},
-   {name:"Power Chord Progression", roman:["I5","bVII5","IV5","I5"]},
-   {name:"Chromatic Descending", roman:["i","bVII","bVI","V7"]}
- ],
- orchestral:[
-   {name:"Cinematic Ambient", roman:["i","bVImaj7","v7","bVII"]},
-   {name:"Epic Heroic Arc", roman:["i","bVI","bIII","bVII"]},
-   {name:"Dark Fantasy Pad", roman:["i","ivsus4","iv","V7"]}
  ]
 };
 
@@ -131,7 +136,7 @@ const DEG={I:0,II:1,III:2,IV:3,V:4,VI:5,VII:6};
 
 function $(id){return document.getElementById(id)}
 
-/* ---------- Voice Leading & Harmonic Engine ---------- */
+/* ---------- Advanced Voice-Leading Engine ---------- */
 function parseChordNotes(symbol, rootStr, scaleModeStr, lastNotes=null) {
   let pc = ROOTS[rootStr] !== undefined ? ROOTS[rootStr] : 0;
   const scale = SCALES[scaleModeStr] || SCALES.major;
@@ -162,7 +167,6 @@ function parseChordNotes(symbol, rootStr, scaleModeStr, lastNotes=null) {
 
   let rawNotes = intervals.map(n => basePitch + n);
 
-  // Smooth voice leading
   if (lastNotes && lastNotes.length) {
     const targetMean = lastNotes.reduce((a,b)=>a+b,0)/lastNotes.length;
     rawNotes = rawNotes.map(p => {
@@ -187,7 +191,7 @@ function parseChordNotes(symbol, rootStr, scaleModeStr, lastNotes=null) {
   return rawNotes.sort((a,b)=>a-b);
 }
 
-/* ---------- App State ---------- */
+/* ---------- State ---------- */
 let blocks=[], selectedId=null, audioCtx=null, master=null, reverbNode=null, muted=[false,false,false,false], bpm=96;
 let isPlaying=false, currentBeat=0, nextNoteTime=0.0, schedulerTimer=null;
 
@@ -195,7 +199,7 @@ function toast(t){const m=$("message");m.textContent=t;m.classList.add("show");c
 
 function renderPresets(){
   const box=$("presets");box.replaceChildren();
-  (CATALOG.pop).concat(CATALOG.hiphop).slice(0, 4).forEach((p, idx)=>{
+  (CATALOG.pop).concat(CATALOG.hiphop).forEach((p, idx)=>{
     const b=document.createElement("button");b.className="preset"+(idx===selectedId?" selected":"");
     const strong=document.createElement("strong");strong.textContent=p.name;
     const span=document.createElement("span");span.textContent=p.roman.join(" · ");
@@ -205,7 +209,7 @@ function renderPresets(){
 
 function renderArrangement(){
   const box=$("arrangement");box.replaceChildren();
-  if(!blocks.length){box.className="arrangement empty";box.textContent="Timeline empty. Select a sequence above or import MIDI.";return}
+  if(!blocks.length){box.className="arrangement empty";box.textContent="Timeline empty. Choose a sequence above or import MIDI.";return}
   box.className="arrangement";
   blocks.forEach((b,i)=>{
     const row=document.createElement("div");row.className="block";
@@ -241,7 +245,7 @@ function loadPreset(p, id){
   renderPresets();renderArrangement();$("play").disabled=!audioCtx;toast("Loaded: "+p.name);
 }
 
-/* ---------- Audio Engine ---------- */
+/* ---------- Audio Engine with Dynamic Velocity Envelopes ---------- */
 function createReverbImpulse(ctx) {
   const rate = ctx.sampleRate, length = rate * 2.2, impulse = ctx.createBuffer(2, length, rate);
   for (let c = 0; c < 2; c++) {
@@ -268,32 +272,36 @@ async function enableAudio(){
       master.connect(audioCtx.destination); master.connect(reverbNode);
     }
     if(audioCtx.state!=="running")await audioCtx.resume();
-    $("audioStatus").textContent="Audio Active";$("audio").textContent="Audio Ready";$("audio").disabled=true;$("play").disabled=!blocks.length;toast("Audio Engine Ready");
+    $("audioStatus").textContent="Audio Active";$("audio").textContent="Audio Ready";$("audio").disabled=true;$("play").disabled=!blocks.length;toast("Studio Engine Unlocked");
   }catch(e){toast(e.message)}
 }
 
 function hz(n){return 440*Math.pow(2,(n-69)/12)}
 
-// Multi-style Polyphonic Synthesizer
+// Dynamic Polyphonic Synthesizer Node
 function playPolyNote(note, time, dur, velocity=0.7, style="legato") {
   if (!audioCtx || muted[0]) return;
   const o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator();
   const filter = audioCtx.createBiquadFilter(), gain = audioCtx.createGain();
 
+  // Dynamic Micro-Timing Jitter (+/- 3ms)
+  const jitter = (Math.random() - 0.5) * 0.006;
+  time = Math.max(audioCtx.currentTime, time + jitter);
+
   let attack = 0.02, cutoff = 1800;
-  if (style === "staccato") { dur = Math.min(dur, 0.15); attack = 0.005; cutoff = 2400; }
-  else if (style === "strum") { attack = 0.01; cutoff = 2200; }
-  else if (style === "arp") { dur = 0.25; attack = 0.008; cutoff = 2000; }
+  if (style === "staccato") { dur = Math.min(dur, 0.18); attack = 0.004; cutoff = 2600; }
+  else if (style === "strum") { attack = 0.012; cutoff = 2200; }
+  else if (style === "arp") { attack = 0.006; cutoff = 2100; }
 
   o1.type = "sine"; o1.frequency.setValueAtTime(hz(note), time);
   o2.type = "triangle"; o2.frequency.setValueAtTime(hz(note) * 2, time);
 
   filter.type = "lowpass";
   filter.frequency.setValueAtTime(cutoff * velocity, time);
-  filter.frequency.exponentialRampToValueAtTime(250, time + dur);
+  filter.frequency.exponentialRampToValueAtTime(200, time + dur);
 
   gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.linearRampToValueAtTime(0.09 * velocity, time + attack);
+  gain.gain.linearRampToValueAtTime(0.12 * velocity, time + attack);
   gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
 
   o1.connect(filter); o2.connect(filter);
@@ -303,26 +311,26 @@ function playPolyNote(note, time, dur, velocity=0.7, style="legato") {
   o1.stop(time + dur + 0.05); o2.stop(time + dur + 0.05);
 }
 
-function playSubBass(note, time, dur) {
+function playSubBass(note, time, dur, velocity=0.8) {
   if (!audioCtx || muted[1]) return;
   const sub = audioCtx.createOscillator(), gain = audioCtx.createGain();
   sub.type = "sine";
   sub.frequency.setValueAtTime(hz(note), time);
 
   gain.gain.setValueAtTime(0.0001, time);
-  gain.gain.linearRampToValueAtTime(0.25, time + 0.03);
+  gain.gain.linearRampToValueAtTime(0.28 * velocity, time + 0.03);
   gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
 
   sub.connect(gain); gain.connect(master);
   sub.start(time); sub.stop(time + dur + 0.05);
 }
 
-function playPercussion(time) {
+function playPercussion(time, velocity=0.7) {
   if (!audioCtx || muted[3]) return;
   const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-  osc.frequency.setValueAtTime(110, time);
+  osc.frequency.setValueAtTime(120, time);
   osc.frequency.exponentialRampToValueAtTime(30, time + 0.14);
-  gain.gain.setValueAtTime(0.3, time);
+  gain.gain.setValueAtTime(0.35 * velocity, time);
   gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
   osc.connect(gain).connect(master);
   osc.start(time); osc.stop(time + 0.16);
@@ -333,6 +341,7 @@ function triggerMeter(idx){
   setTimeout(()=>el.style.width="0",120);
 }
 
+/* ---------- Rhythmic Scheduler with Humanization & Articulation ---------- */
 function scheduleBeat(beatIndex, time){
   if (!blocks.length) return;
   const totalBeats = blocks.length * 4;
@@ -340,48 +349,88 @@ function scheduleBeat(beatIndex, time){
   const blockBeat = beatIndex % 4;
   const block = blocks[currentBlockIdx];
   const spb = 60.0 / bpm;
+
   const style = $("articulation").value;
+  const arpDir = $("arpPattern").value;
+  const swingPct = Number($("swing").value) / 100.0;
+  const strumSpeedMs = Number($("strumSpeed").value) / 1000.0;
+
+  // Apply Groove Swing on off-beats
+  let swingOffset = 0;
+  if (blockBeat % 1 !== 0) { swingOffset = (spb * 0.5) * (swingPct * 0.4); }
+  const adjustedTime = time + swingOffset;
 
   const chordPitches = block.notes.slice(1);
   const bassPitch = block.notes[0];
 
-  // Articulation Engine Routing
+  // Dynamic Velocity Curve (Accent Beat 1 and Beat 3)
+  const isAccent = (blockBeat === 0 || blockBeat === 2);
+  const baseVelocity = isAccent ? 0.85 : 0.62;
+
+  // Dynamic Articulation Engine
   if (style === "arp") {
-    const pitch = chordPitches[blockBeat % chordPitches.length];
-    playPolyNote(pitch, time, spb * 0.8, 0.7, "arp");
+    // 16th Note Arpeggiator
+    let pitchList = [...chordPitches];
+    if (arpDir === "down") pitchList.reverse();
+    else if (arpDir === "updown") pitchList = pitchList.concat([...pitchList].reverse().slice(1,-1));
+    else if (arpDir === "random") pitchList.sort(() => Math.random() - 0.5);
+
+    for (let sub = 0; sub < 4; sub++) {
+      const subTime = adjustedTime + (sub * (spb / 4));
+      const subVel = (sub === 0) ? baseVelocity : baseVelocity * (0.65 + Math.random() * 0.2);
+      const pitch = pitchList[(Math.floor(beatIndex * 4) + sub) % pitchList.length];
+      playPolyNote(pitch, subTime, spb * 0.35, subVel, "arp");
+    }
     triggerMeter(0);
+
   } else if (style === "strum") {
-    if (blockBeat === 0 || blockBeat === 2) {
-      chordPitches.forEach((n, idx) => playPolyNote(n, time + idx * 0.035, spb * 1.8, 0.75, "strum"));
+    if (isAccent) {
+      const isUpstroke = (blockBeat === 2);
+      const strumedNotes = isUpstroke ? [...chordPitches].reverse() : chordPitches;
+      
+      strumedNotes.forEach((n, idx) => {
+        // Logarithmic Strum Spacing
+        const strumDelay = Math.pow(idx, 1.1) * strumSpeedMs;
+        const noteVel = baseVelocity * (1.0 - idx * 0.05);
+        playPolyNote(n, adjustedTime + strumDelay, spb * 1.8, noteVel, "strum");
+      });
       triggerMeter(0);
     }
+
   } else if (style === "staccato") {
     if (blockBeat % 1 === 0) {
-      chordPitches.forEach(n => playPolyNote(n, time, spb * 0.4, 0.7, "staccato"));
+      chordPitches.forEach((n) => {
+        const vel = baseVelocity * (0.85 + Math.random() * 0.2);
+        playPolyNote(n, adjustedTime, spb * 0.2, vel, "staccato");
+      });
       triggerMeter(0);
     }
-  } else { // Legato (Default)
+
+  } else { // Legato (Default Pad Style)
     if (blockBeat === 0) {
-      chordPitches.forEach((n, idx) => playPolyNote(n, time + idx * 0.015, spb * 3.8, 0.7, "legato"));
+      chordPitches.forEach((n, idx) => {
+        const strumDelay = idx * 0.012; // Subtle natural hand drop
+        playPolyNote(n, adjustedTime + strumDelay, spb * 3.8, baseVelocity, "legato");
+      });
       triggerMeter(0);
     }
   }
 
-  // Sub Bass Syncopation
+  // Dynamic Sub Bass Syncopation
   if (blockBeat === 0 || blockBeat === 2.5) {
-    playSubBass(bassPitch, time, spb * 1.8);
+    playSubBass(bassPitch, adjustedTime, spb * 1.6, baseVelocity);
     triggerMeter(1);
   }
 
-  // Melodic Highlights
-  if (blockBeat % 1 === 0 && Math.random() > 0.4) {
+  // Soft Melodic Highlights
+  if (blockBeat % 1 === 0 && Math.random() > 0.45) {
     const melPitch = chordPitches[blockBeat % chordPitches.length] + 12;
-    playPolyNote(melPitch, time + 0.1, spb * 0.5, 0.5, style);
+    playPolyNote(melPitch, adjustedTime + (spb * 0.5), spb * 0.4, baseVelocity * 0.65, style);
     triggerMeter(2);
   }
 
-  // Drums
-  if (blockBeat === 0 || blockBeat === 2) playPercussion(time);
+  // Percussion Pulse
+  if (isAccent) playPercussion(adjustedTime, baseVelocity);
   triggerMeter(3);
 
   setTimeout(() => {
@@ -412,13 +461,16 @@ function stop(){
   isPlaying = false; $("playStatus").textContent="Stopped";
 }
 
-/* ---------- Events & Handlers ---------- */
+/* ---------- Events & Setup ---------- */
 $("audio").onclick=enableAudio;
 $("play").onclick=start;
 $("stop").onclick=stop;
 $("rootKey").onchange=function(){ revoiceAll(); renderArrangement(); };
 $("scaleMode").onchange=function(){ revoiceAll(); renderArrangement(); };
 $("bpm").oninput=function(){bpm=Number(this.value);$("bpmText").textContent=bpm};
+$("swing").oninput=function(){$("swingText").textContent=this.value+"%"};
+$("strumSpeed").oninput=function(){$("strumText").textContent=this.value+"ms"};
+
 document.querySelectorAll(".tracks button").forEach(b=>b.onclick=function(){
   const i=Number(this.dataset.track);muted[i]=!muted[i];this.textContent=muted[i]?"Unmute":"Mute";
 });
