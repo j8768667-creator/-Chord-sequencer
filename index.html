@@ -413,11 +413,14 @@ function parseMIDIFile(arrayBuffer) {
     while (offset < trackEnd) {
       let delta = 0;
       while (true) {
+        if (offset >= data.byteLength) break;
         let byte = data.getUint8(offset++);
         delta = (delta << 7) | (byte & 0x7F);
         if (!(byte & 0x80)) break;
       }
       absoluteTicks += delta;
+
+      if (offset >= data.byteLength) break;
 
       let status = data.getUint8(offset);
       if (status & 0x80) {
@@ -438,6 +441,7 @@ function parseMIDIFile(arrayBuffer) {
         offset++;
         let metaLen = 0;
         while (true) {
+          if (offset >= data.byteLength) break;
           let b = data.getUint8(offset++);
           metaLen = (metaLen << 7) | (b & 0x7F);
           if (!(b & 0x80)) break;
