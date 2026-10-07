@@ -2,9 +2,8 @@
  * ChordFlow chord repository.
  *
  * The catalog is deliberately dependency-free so the preset library can render
- * even when Safari temporarily cannot reach a CDN. Tonal is loaded lazily by
- * parseWithTonal() when available; the local Roman-numeral parser is the
- * deterministic fallback used by the app itself.
+ * even when Safari temporarily cannot reach a CDN. The local Roman-numeral
+ * parser is the deterministic fallback used by the app itself.
  */
 export const CHORD_PROGRESSIONS = Object.freeze({
   pop: Object.freeze([Object.freeze(["I", "V", "vi", "IV"]), Object.freeze(["vi", "IV", "I", "V"]), Object.freeze(["I", "vi", "IV", "V"])]),
@@ -89,15 +88,4 @@ export function randomProgression(genre, rootKey = "C major") {
 
 export function listProgressions(genre, rootKey = "C major") {
   return (CHORD_PROGRESSIONS[genre] ?? []).map((_, index) => progressionForGenre(genre, rootKey, index));
-}
-
-/** Optional Tonal bridge for environments where the CDN is reachable. */
-export async function parseWithTonal(progression, rootKey = "C major") {
-  const { tonic } = parseKey(rootKey);
-  try {
-    const { Progression } = await import("https://esm.sh/@tonaljs/progression@4.10.0");
-    return Progression.fromRomanNumerals(tonic, progression);
-  } catch {
-    return romanToChordSymbols(progression, rootKey);
-  }
 }
