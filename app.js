@@ -238,6 +238,69 @@ function randomMelodyEvents(chordNotes, barIndex, secondsPerBar) {
   return events;
 }
 
+function buildBassEvents(genre, barStart, secondsPerBar, secondsPerBeat, bassRoot) {
+  const events = [];
+  if (genre === "orchestral" || genre === "soundtrack") {
+    events.push({
+      time: barStart,
+      duration: secondsPerBar,
+      note: bassRoot,
+      velocity: 0.45,
+    });
+  } else if (genre === "rock") {
+    for (let step = 0; step < 8; step += 1) {
+      events.push({
+        time: barStart + (step * secondsPerBar) / 8,
+        duration: secondsPerBar / 10,
+        note: bassRoot,
+        velocity: step % 2 ? 0.5 : 0.62,
+      });
+    }
+  } else {
+    for (let beat = 0; beat < 4; beat += 1) {
+      events.push({
+        time: barStart + beat * secondsPerBeat,
+        duration: secondsPerBeat * 0.8,
+        note: bassRoot,
+        velocity: 0.55,
+      });
+    }
+  }
+  return events;
+}
+
+function buildDrumEvents(genre, barStart, secondsPerBar, secondsPerBeat) {
+  const events = [];
+  const kickSteps = genre === "hiphop" ? [0, 3] : [0, 1, 2, 3];
+  kickSteps.forEach((beat) => {
+    events.push({
+      time: barStart + beat * secondsPerBeat,
+      kind: "kick",
+      velocity: 0.58,
+    });
+  });
+
+  if (genre === "rock" || genre === "pop") {
+    for (let step = 0; step < 8; step += 1) {
+      events.push({
+        time: barStart + (step * secondsPerBar) / 8,
+        kind: "hat",
+        velocity: 0.38,
+      });
+    }
+  } else if (genre === "hiphop") {
+    events.push(
+      { time: barStart + secondsPerBeat, kind: "snare", velocity: 0.55 },
+      { time: barStart + secondsPerBeat * 3, kind: "snare", velocity: 0.58 },
+      { time: barStart + secondsPerBeat * 0.5, kind: "hat", velocity: 0.35 },
+      { time: barStart + secondsPerBeat * 1.5, kind: "hat", velocity: 0.32 },
+      { time: barStart + secondsPerBeat * 2.5, kind: "hat", velocity: 0.35 },
+      { time: barStart + secondsPerBeat * 3.5, kind: "hat", velocity: 0.32 },
+    );
+  }
+  return events;
+}
+
 function rebuildRuntimeEvents() {
   const secondsPerBeat = 60 / state.bpm;
   const secondsPerBar = secondsPerBeat * 4;
@@ -262,64 +325,17 @@ function rebuildRuntimeEvents() {
       velocity: 0.45,
     });
 
-    if (state.genre === "orchestral" || state.genre === "soundtrack") {
-      state.trackEvents.bass.push({
-        time: barStart,
-        duration: secondsPerBar,
-        note: bassRoot,
-        velocity: 0.45,
-      });
-    } else if (state.genre === "rock") {
-      for (let step = 0; step < 8; step += 1) {
-        state.trackEvents.bass.push({
-          time: barStart + (step * secondsPerBar) / 8,
-          duration: secondsPerBar / 10,
-          note: bassRoot,
-          velocity: step % 2 ? 0.5 : 0.62,
-        });
-      }
-    } else {
-      for (let beat = 0; beat < 4; beat += 1) {
-        state.trackEvents.bass.push({
-          time: barStart + beat * secondsPerBeat,
-          duration: secondsPerBeat * 0.8,
-          note: bassRoot,
-          velocity: 0.55,
-        });
-      }
-    }
+    state.trackEvents.bass.push(
+      ...buildBassEvents(state.genre, barStart, secondsPerBar, secondsPerBeat, bassRoot),
+    );
 
     state.trackEvents.melody.push(
       ...randomMelodyEvents(chordNotes, barIndex, secondsPerBar),
     );
 
-    const kickSteps = state.genre === "hiphop" ? [0, 3] : [0, 1, 2, 3];
-    kickSteps.forEach((beat) => {
-      state.trackEvents.drums.push({
-        time: barStart + beat * secondsPerBeat,
-        kind: "kick",
-        velocity: 0.58,
-      });
-    });
-
-    if (state.genre === "rock" || state.genre === "pop") {
-      for (let step = 0; step < 8; step += 1) {
-        state.trackEvents.drums.push({
-          time: barStart + (step * secondsPerBar) / 8,
-          kind: "hat",
-          velocity: 0.38,
-        });
-      }
-    } else if (state.genre === "hiphop") {
-      state.trackEvents.drums.push(
-        { time: barStart + secondsPerBeat, kind: "snare", velocity: 0.55 },
-        { time: barStart + secondsPerBeat * 3, kind: "snare", velocity: 0.58 },
-        { time: barStart + secondsPerBeat * 0.5, kind: "hat", velocity: 0.35 },
-        { time: barStart + secondsPerBeat * 1.5, kind: "hat", velocity: 0.32 },
-        { time: barStart + secondsPerBeat * 2.5, kind: "hat", velocity: 0.35 },
-        { time: barStart + secondsPerBeat * 3.5, kind: "hat", velocity: 0.32 },
-      );
-    }
+    state.trackEvents.drums.push(
+      ...buildDrumEvents(state.genre, barStart, secondsPerBar, secondsPerBeat),
+    );
   });
 
   // Imported MIDI replaces the melody queue without destroying the generated
