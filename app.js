@@ -352,6 +352,16 @@ function scheduleCurrentArrangement() {
   const secondsPerBar = (60 / state.bpm) * 4;
   const totalSeconds = secondsPerBar * totalBars;
 
+  // Pre-group events by bar to avoid O(N) traversals in the scheduler loop
+  const eventsByBar = { bass: {}, melody: {}, drums: {} };
+  for (const track of ["bass", "melody", "drums"]) {
+    for (const event of state.trackEvents[track]) {
+      const bIdx = Math.floor(event.time / secondsPerBar);
+      if (!eventsByBar[track][bIdx]) eventsByBar[track][bIdx] = [];
+      eventsByBar[track][bIdx].push(event);
+    }
+  }
+
   // Uniform one-measure scheduler. It uses Tone's Web Audio clock instead of
   // requestAnimationFrame, reducing CPU wakeups on iPadOS.
   state.schedulerLoop = new (getTone().Loop)((time) => {
@@ -363,8 +373,9 @@ function scheduleCurrentArrangement() {
       audio.triggerChord(chord.notes, time, "1m", chord.velocity);
     }
 
-    for (const event of state.trackEvents.bass) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
+    const bassEvents = eventsByBar.bass[barIndex];
+    if (bassEvents) {
+      for (const event of bassEvents) {
         audio.triggerBass(
           event.note,
           time + (event.time - barStart),
@@ -374,8 +385,9 @@ function scheduleCurrentArrangement() {
       }
     }
 
-    for (const event of state.trackEvents.melody) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
+    const melodyEvents = eventsByBar.melody[barIndex];
+    if (melodyEvents) {
+      for (const event of melodyEvents) {
         const note = event.note ?? getTone()?.Frequency(event.midi, "midi").toNote();
         audio.triggerMelody(
           note,
@@ -386,8 +398,9 @@ function scheduleCurrentArrangement() {
       }
     }
 
-    for (const event of state.trackEvents.drums) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
+    const drumEvents = eventsByBar.drums[barIndex];
+    if (drumEvents) {
+      for (const event of drumEvents) {
         audio.triggerDrum(
           event.kind,
           time + (event.time - barStart),
