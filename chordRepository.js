@@ -87,10 +87,6 @@ export function randomProgression(genre, rootKey = "C major") {
   return progressionForGenre(genre, rootKey, Math.floor(Math.random() * catalog.length));
 }
 
-export function listProgressions(genre, rootKey = "C major") {
-  return (CHORD_PROGRESSIONS[genre] ?? []).map((_, index) => progressionForGenre(genre, rootKey, index));
-}
-
 /** Optional Tonal bridge for environments where the CDN is reachable. */
 export async function parseWithTonal(progression, rootKey = "C major") {
   const { tonic } = parseKey(rootKey);
