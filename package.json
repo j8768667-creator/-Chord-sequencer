@@ -1,0 +1,7 @@
+{
+  "name": "audio-engine-tests",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
