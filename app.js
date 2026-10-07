@@ -352,6 +352,23 @@ function scheduleCurrentArrangement() {
   const secondsPerBar = (60 / state.bpm) * 4;
   const totalSeconds = secondsPerBar * totalBars;
 
+  const bucketedBass = Array.from({ length: totalBars }, () => []);
+  const bucketedMelody = Array.from({ length: totalBars }, () => []);
+  const bucketedDrums = Array.from({ length: totalBars }, () => []);
+
+  for (const event of state.trackEvents.bass) {
+    const idx = Math.floor(event.time / secondsPerBar);
+    if (idx >= 0 && idx < totalBars) bucketedBass[idx].push(event);
+  }
+  for (const event of state.trackEvents.melody) {
+    const idx = Math.floor(event.time / secondsPerBar);
+    if (idx >= 0 && idx < totalBars) bucketedMelody[idx].push(event);
+  }
+  for (const event of state.trackEvents.drums) {
+    const idx = Math.floor(event.time / secondsPerBar);
+    if (idx >= 0 && idx < totalBars) bucketedDrums[idx].push(event);
+  }
+
   // Uniform one-measure scheduler. It uses Tone's Web Audio clock instead of
   // requestAnimationFrame, reducing CPU wakeups on iPadOS.
   state.schedulerLoop = new (getTone().Loop)((time) => {
@@ -363,37 +380,31 @@ function scheduleCurrentArrangement() {
       audio.triggerChord(chord.notes, time, "1m", chord.velocity);
     }
 
-    for (const event of state.trackEvents.bass) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
-        audio.triggerBass(
-          event.note,
-          time + (event.time - barStart),
-          event.duration,
-          event.velocity,
-        );
-      }
+    for (const event of bucketedBass[barIndex]) {
+      audio.triggerBass(
+        event.note,
+        time + (event.time - barStart),
+        event.duration,
+        event.velocity,
+      );
     }
 
-    for (const event of state.trackEvents.melody) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
-        const note = event.note ?? getTone()?.Frequency(event.midi, "midi").toNote();
-        audio.triggerMelody(
-          note,
-          time + (event.time - barStart),
-          event.duration,
-          event.velocity,
-        );
-      }
+    for (const event of bucketedMelody[barIndex]) {
+      const note = event.note ?? getTone()?.Frequency(event.midi, "midi").toNote();
+      audio.triggerMelody(
+        note,
+        time + (event.time - barStart),
+        event.duration,
+        event.velocity,
+      );
     }
 
-    for (const event of state.trackEvents.drums) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
-        audio.triggerDrum(
-          event.kind,
-          time + (event.time - barStart),
-          event.velocity,
-        );
-      }
+    for (const event of bucketedDrums[barIndex]) {
+      audio.triggerDrum(
+        event.kind,
+        time + (event.time - barStart),
+        event.velocity,
+      );
     }
 
     state.activeBlockIndex = barIndex;
