@@ -141,6 +141,12 @@ const DEG = {I:0,II:1,III:2,IV:3,V:4,VI:5,VII:6};
 
 function $(id){ return document.getElementById(id); }
 
+// UI Cache Variables
+let uiStyle = "legato";
+let uiArpDir = "up";
+let uiSwingPct = 35 / 100.0;
+let uiStrumSpeedMs = 45 / 1000.0;
+
 /* ---------- Voice-Leading Engine ---------- */
 function parseChordNotes(symbol, rootStr, scaleModeStr, prevChordPitches = null) {
   let pc = ROOTS[rootStr] !== undefined ? ROOTS[rootStr] : 0;
@@ -584,10 +590,10 @@ function scheduleBeat(beatIndex, time){
   const block = blocks[currentBlockIdx];
   const spb = 60.0 / bpm;
 
-  const style = $("articulation").value;
-  const arpDir = $("arpPattern").value;
-  const swingPct = Number($("swing").value) / 100.0;
-  const strumSpeedMs = Number($("strumSpeed").value) / 1000.0;
+  const style = uiStyle;
+  const arpDir = uiArpDir;
+  const swingPct = uiSwingPct;
+  const strumSpeedMs = uiStrumSpeedMs;
 
   let swingOffset = (blockBeat % 1 !== 0) ? (spb * 0.5) * (swingPct * 0.4) : 0;
   const adjustedTime = time + swingOffset;
@@ -688,8 +694,22 @@ $("midiInput").onchange = function(e) {
 $("rootKey").onchange = function(){ revoiceAll(); renderArrangement(); };
 $("scaleMode").onchange = function(){ revoiceAll(); renderArrangement(); };
 $("bpm").oninput = function(){ bpm = Number(this.value); $("bpmText").textContent = bpm; };
-$("swing").oninput = function(){ $("swingText").textContent = this.value + "%"; };
-$("strumSpeed").oninput = function(){ $("strumText").textContent = this.value + "ms"; };
+$("swing").oninput = function(){
+  $("swingText").textContent = this.value + "%";
+  uiSwingPct = Number(this.value) / 100.0;
+};
+$("strumSpeed").oninput = function(){
+  $("strumText").textContent = this.value + "ms";
+  uiStrumSpeedMs = Number(this.value) / 1000.0;
+};
+$("articulation").onchange = function(){ uiStyle = this.value; };
+$("arpPattern").onchange = function(){ uiArpDir = this.value; };
+
+// Initialize variables with current DOM values
+uiStyle = $("articulation").value;
+uiArpDir = $("arpPattern").value;
+uiSwingPct = Number($("swing").value) / 100.0;
+uiStrumSpeedMs = Number($("strumSpeed").value) / 1000.0;
 
 document.querySelectorAll(".tracks button").forEach(b => b.onclick = function(){
   const i = Number(this.dataset.track); muted[i] = !muted[i]; this.textContent = muted[i] ? "Unmute" : "Mute";
