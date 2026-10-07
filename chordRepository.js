@@ -39,8 +39,8 @@ function romanParts(numeral) {
 function accidentalOffset(text) { return [...text].reduce((n, c) => n + (c === "b" ? -1 : 1), 0); }
 function midiName(pc, octave) { return `${PC_NAMES[(pc + 120) % 12]}${octave}`; }
 
-function localRomanToChord(numeral, rootKey) {
-  const { tonic, mode } = parseKey(rootKey);
+function localRomanToChord(numeral, parsedKey) {
+  const { tonic, mode } = parsedKey;
   const tonicPc = NOTE_PCS[tonic];
   const scale = mode === "minor" ? SCALE_MINOR : SCALE_MAJOR;
   const parts = romanParts(numeral);
@@ -62,12 +62,14 @@ function localRomanToChord(numeral, rootKey) {
 }
 
 export function romanToChordSymbols(progression, rootKey = "C major") {
-  return progression.map((numeral) => localRomanToChord(numeral, rootKey).symbol);
+  const parsedKey = parseKey(rootKey);
+  return progression.map((numeral) => localRomanToChord(numeral, parsedKey).symbol);
 }
 
 export function chordNotes(progression, rootKey = "C major") {
+  const parsedKey = parseKey(rootKey);
   return progression.map((roman, index) => {
-    const parsed = localRomanToChord(roman, rootKey);
+    const parsed = localRomanToChord(roman, parsedKey);
     return { index, roman, symbol: parsed.symbol, notes: parsed.notes, root: parsed.root, quality: parsed.quality };
   });
 }
