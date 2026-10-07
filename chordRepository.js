@@ -28,7 +28,7 @@ export function parseKey(keyConfig = "C major") {
   return { tonic, mode: match[3].toLowerCase(), label: `${tonic} ${match[3].toLowerCase()}` };
 }
 
-function romanParts(numeral) {
+export function romanParts(numeral) {
   const match = String(numeral).replace(/♭/g, "b").replace(/♯/g, "#").match(/^([b#]*)([ivIV]+)(.*)$/);
   if (!match) throw new Error(`Unsupported Roman numeral: ${numeral}`);
   const degree = match[2].toUpperCase();
