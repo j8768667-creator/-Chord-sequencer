@@ -332,6 +332,19 @@ function rebuildRuntimeEvents() {
       velocity: note.velocity,
     }));
   }
+
+  // Pre-bucket melody events by bar index to optimize the scheduler loop.
+  state.trackEvents.melodyByBar = [];
+  const totalBars = Math.max(1, state.blocks.length);
+  for (let i = 0; i < totalBars; i++) {
+    state.trackEvents.melodyByBar.push([]);
+  }
+  for (const event of state.trackEvents.melody) {
+    const barIndex = Math.floor(event.time / secondsPerBar);
+    if (barIndex >= 0 && barIndex < totalBars) {
+      state.trackEvents.melodyByBar[barIndex].push(event);
+    }
+  }
 }
 
 function scheduleCurrentArrangement() {
@@ -374,16 +387,15 @@ function scheduleCurrentArrangement() {
       }
     }
 
-    for (const event of state.trackEvents.melody) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
-        const note = event.note ?? getTone()?.Frequency(event.midi, "midi").toNote();
-        audio.triggerMelody(
-          note,
-          time + (event.time - barStart),
-          event.duration,
-          event.velocity,
-        );
-      }
+    const melodyEvents = state.trackEvents.melodyByBar[barIndex] || [];
+    for (const event of melodyEvents) {
+      const note = event.note ?? getTone()?.Frequency(event.midi, "midi").toNote();
+      audio.triggerMelody(
+        note,
+        time + (event.time - barStart),
+        event.duration,
+        event.velocity,
+      );
     }
 
     for (const event of state.trackEvents.drums) {
