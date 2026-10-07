@@ -334,6 +334,52 @@ function rebuildRuntimeEvents() {
   }
 }
 
+function onScheduleLoop(time, totalBars, secondsPerBar) {
+  const barIndex = state.currentBarIndex % totalBars;
+  const barStart = barIndex * secondsPerBar;
+
+  const chord = state.trackEvents.chords[barIndex];
+  if (chord) {
+    audio.triggerChord(chord.notes, time, "1m", chord.velocity);
+  }
+
+  for (const event of state.trackEvents.bass) {
+    if (event.time >= barStart && event.time < barStart + secondsPerBar) {
+      audio.triggerBass(
+        event.note,
+        time + (event.time - barStart),
+        event.duration,
+        event.velocity,
+      );
+    }
+  }
+
+  for (const event of state.trackEvents.melody) {
+    if (event.time >= barStart && event.time < barStart + secondsPerBar) {
+      const note = event.note ?? getTone()?.Frequency(event.midi, "midi").toNote();
+      audio.triggerMelody(
+        note,
+        time + (event.time - barStart),
+        event.duration,
+        event.velocity,
+      );
+    }
+  }
+
+  for (const event of state.trackEvents.drums) {
+    if (event.time >= barStart && event.time < barStart + secondsPerBar) {
+      audio.triggerDrum(
+        event.kind,
+        time + (event.time - barStart),
+        event.velocity,
+      );
+    }
+  }
+
+  state.activeBlockIndex = barIndex;
+  state.currentBarIndex = (state.currentBarIndex + 1) % totalBars;
+}
+
 function scheduleCurrentArrangement() {
   if (!audio.ready || getTone()?.context.state !== "running" || state.blocks.length === 0) return;
 
@@ -355,49 +401,7 @@ function scheduleCurrentArrangement() {
   // Uniform one-measure scheduler. It uses Tone's Web Audio clock instead of
   // requestAnimationFrame, reducing CPU wakeups on iPadOS.
   state.schedulerLoop = new (getTone().Loop)((time) => {
-    const barIndex = state.currentBarIndex % totalBars;
-    const barStart = barIndex * secondsPerBar;
-
-    const chord = state.trackEvents.chords[barIndex];
-    if (chord) {
-      audio.triggerChord(chord.notes, time, "1m", chord.velocity);
-    }
-
-    for (const event of state.trackEvents.bass) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
-        audio.triggerBass(
-          event.note,
-          time + (event.time - barStart),
-          event.duration,
-          event.velocity,
-        );
-      }
-    }
-
-    for (const event of state.trackEvents.melody) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
-        const note = event.note ?? getTone()?.Frequency(event.midi, "midi").toNote();
-        audio.triggerMelody(
-          note,
-          time + (event.time - barStart),
-          event.duration,
-          event.velocity,
-        );
-      }
-    }
-
-    for (const event of state.trackEvents.drums) {
-      if (event.time >= barStart && event.time < barStart + secondsPerBar) {
-        audio.triggerDrum(
-          event.kind,
-          time + (event.time - barStart),
-          event.velocity,
-        );
-      }
-    }
-
-    state.activeBlockIndex = barIndex;
-    state.currentBarIndex = (state.currentBarIndex + 1) % totalBars;
+    onScheduleLoop(time, totalBars, secondsPerBar);
   }, "1m");
 
   state.schedulerLoop.start(0);
