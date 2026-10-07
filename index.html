@@ -598,10 +598,20 @@ function scheduleBeat(beatIndex, time){
   const baseVelocity = isAccent ? 0.85 : 0.62;
 
   if (style === "arp") {
-    let pitchList = [...chordPitches];
-    if (arpDir === "down") pitchList.reverse();
-    else if (arpDir === "updown") pitchList = pitchList.concat([...pitchList].reverse().slice(1,-1));
-    else if (arpDir === "random") pitchList.sort(() => Math.random() - 0.5);
+    let pitchList;
+    if (arpDir === "random") {
+      pitchList = [...chordPitches].sort(() => Math.random() - 0.5);
+    } else {
+      if (!block._arpCache || block._arpDir !== arpDir || block._arpNotes !== block.notes) {
+        let pList = [...chordPitches];
+        if (arpDir === "down") pList.reverse();
+        else if (arpDir === "updown") pList = pList.concat([...pList].reverse().slice(1,-1));
+        block._arpCache = pList;
+        block._arpDir = arpDir;
+        block._arpNotes = block.notes;
+      }
+      pitchList = block._arpCache;
+    }
 
     for (let sub = 0; sub < 4; sub++) {
       const subTime = adjustedTime + (sub * (spb / 4));
